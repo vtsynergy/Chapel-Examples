@@ -8,11 +8,14 @@ var A: [1..nelem] real(32);
 var B: [1..nelem] real(32);
 var C: [1..nelem] real(32);
 forall i in 1..nelem{
+  assertOnGpu();
   A[i]=i;
 }
 forall i in 1..nelem{
+  assertOnGpu();
   B[i]=2*i;
 }
 forall i in 1..nelem {
+  assertOnGpu();
   C[i] = A[i] + B[i];
 }
