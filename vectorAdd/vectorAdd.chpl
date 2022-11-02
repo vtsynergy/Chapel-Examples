@@ -30,7 +30,7 @@ forall i in 1..nelem {
   D[i] = 3*i;
 }
 
-forall i in 1..nelem {
+forall i in 1..nelem with (ref matches) {
   if (C_host[i] != D[i]) {
     writeln("Mismatch at ", i, "GPU: ", C_host[i], "CPU: ", D[i]);
     matches = false;
