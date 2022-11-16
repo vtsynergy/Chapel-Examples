@@ -5,7 +5,7 @@
 use GPU;
 
 //This is "library" code which we are assuming uses C conventions (base-0 indexing)
-proc vecAdd(A_host: [] real(32), B_host: [] real(32), C_host: [] real(32), lo: int(32), hi: int(32), nelem: int(32)) {
+proc vecAdd(A_host: [] real(32), B_host: [] real(32), C_host: [] real(32), lo: int(32), hi: int(32), nelem: int(32), dev_num: int(32)) {
 
   on here.gpus[0] {
     var A: [lo..hi] real(32);

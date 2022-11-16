@@ -7,12 +7,14 @@
 */
 use GPU;
 
-extern proc vecAdd(A: [] real(32), B: [] real(32), C: [] real(32), lo: int(32), hi: int(32), nelem: int(32));
+extern proc vecAdd(A: [] real(32), B: [] real(32), C: [] real(32), lo: int(32), hi: int(32), nelem: int(32), dev_num: int(32));
 
 config const nelem: int(32) = 1024*16; //Override on the command line
+config const dev: int(32) = 0; //Default to zeroth device, but allow for override
 var A_host: [1..nelem] real(32);
 var B_host: [1..nelem] real(32);
 var C_host: [1..nelem] real(32);
+writeln("Testing on device: ", dev);
 
 //Initialize data on the GPU for convenience
 on here.gpus[0] {
@@ -33,7 +35,7 @@ on here.gpus[0] {
 //Not sure how to use the iterator yet, lets start with a direct call
 //Whose job is it to convert from base-0 to base-1 indexing and back?
 //Assuming we are modeling calling existing backend functions, then we should convert in Chapel space, not expect the library code to convert.
-vecAdd(A_host, B_host, C_host, 0, nelem-1, nelem);
+vecAdd(A_host, B_host, C_host, 0, nelem-1, nelem, dev);
 
 
 var matches: bool = true;

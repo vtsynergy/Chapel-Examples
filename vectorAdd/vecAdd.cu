@@ -10,6 +10,7 @@ __global__ void vectorAddCUDA(REAL_TYPE *A, REAL_TYPE *B, REAL_TYPE *C, int32_t 
 extern "C" {
 void vecAdd(REAL_TYPE *A, REAL_TYPE *B, REAL_TYPE *C, int32_t lo, int32_t hi, int32_t nelem) {
   REAL_TYPE *dA, *dB, *dC;
+  cudaSetDevice(dev_num);
   cudaMalloc(&dA, sizeof(REAL_TYPE) * (hi - lo + 1));
   cudaMalloc(&dB, sizeof(REAL_TYPE) * (hi - lo + 1));
   cudaMalloc(&dC, sizeof(REAL_TYPE) * (hi - lo + 1));
