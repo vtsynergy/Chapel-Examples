@@ -8,7 +8,7 @@ __global__ void vectorAddCUDA(REAL_TYPE *A, REAL_TYPE *B, REAL_TYPE *C, int32_t 
 }
 
 extern "C" {
-void vecAdd(REAL_TYPE *A, REAL_TYPE *B, REAL_TYPE *C, int32_t lo, int32_t hi, int32_t nelem) {
+void vecAdd(REAL_TYPE *A, REAL_TYPE *B, REAL_TYPE *C, int32_t lo, int32_t hi, int32_t nelem, int32_t dev_num) {
   REAL_TYPE *dA, *dB, *dC;
   int32_t work = hi-lo+1;
   cudaSetDevice(dev_num);
