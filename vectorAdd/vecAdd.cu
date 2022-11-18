@@ -22,5 +22,8 @@ void vecAdd(REAL_TYPE *A, REAL_TYPE *B, REAL_TYPE *C, int32_t lo, int32_t hi, in
   dim3 grid = {(work / block.x) + (work % block.x ? 1 : 0), 1, 1};
   vectorAddCUDA<<<grid, block>>>(dA, dB, dC, work);
   cudaMemcpy(C + lo, dC, sizeof(REAL_TYPE) * work, cudaMemcpyDeviceToHost);
+  cudaFree(dA);
+  cudaFree(dB);
+  cudaFree(dC);
 }
 }
