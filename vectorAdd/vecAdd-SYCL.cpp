@@ -41,36 +41,37 @@ void setQueueToSYCLDevice(int32_t dev_num) {
 extern "C" {
 void vecAdd(REAL_TYPE *A, REAL_TYPE *B, REAL_TYPE *C, int32_t lo, int32_t hi, int32_t nelem,
             int32_t dev_num) {
+  int32_t work = hi-lo+1;
   setQueueToSYCLDevice(dev_num);
   // We can let the buffers use the host pointers that are coming in
-  sycl::buffer<REAL_TYPE> dA(A, hi - lo + 1, sycl::property::buffer::use_host_ptr());
-  sycl::buffer<REAL_TYPE> dB(B, hi - lo + 1, sycl::property::buffer::use_host_ptr());
-  sycl::buffer<REAL_TYPE> dC(C, hi - lo + 1, sycl::property::buffer::use_host_ptr());
+  sycl::buffer<REAL_TYPE> dA(A + lo, work, sycl::property::buffer::use_host_ptr());
+  sycl::buffer<REAL_TYPE> dB(B + lo, work, sycl::property::buffer::use_host_ptr());
+  sycl::buffer<REAL_TYPE> dC(C + lo, work, sycl::property::buffer::use_host_ptr());
   // Since C is the result buffer, we want to force it to write back when it goes out of scope
   dC.set_write_back(true);
 
   // Heirarchical parallelism, but one could equally do a plain for_all without nesting
   sycl::range<1> local{256};
-  sycl::range<1> global{((nelem / local.get(0)) + (nelem % local.get(0) ? 1 : 0)) * local.get(0)};
-  std::cerr << "Nelem: " << nelem << " Global: " << global.get(0) << " Local: " << local.get(0)
+  sycl::range<1> global{((work / local.get(0)) + (work % local.get(0) ? 1 : 0)) * local.get(0)};
+  std::cerr << "Work: " << work << " Global: " << global.get(0) << " Local: " << local.get(0)
             << std::endl;
   try {
     // Submit a lambda which 1) gets access to the buffers, and 2) invokes the kernel
     sycl::event vecAdd_event = myQueue.submit([&](sycl::handler &cgh) {
       // Get access to data ranges
       sycl::accessor<REAL_TYPE, 1, sycl::access::mode::read> A_acc =
-          dA.get_access<sycl::access::mode::read>(cgh, sycl::range<1>{(size_t)(hi - lo + 1)});
+          dA.get_access<sycl::access::mode::read>(cgh, sycl::range<1>{(size_t)work});
       sycl::accessor<REAL_TYPE, 1, sycl::access::mode::read> B_acc =
-          dB.get_access<sycl::access::mode::read>(cgh, sycl::range<1>{(size_t)(hi - lo + 1)});
+          dB.get_access<sycl::access::mode::read>(cgh, sycl::range<1>{(size_t)work});
       sycl::accessor<REAL_TYPE, 1, sycl::access_mode::discard_write> C_acc =
           dC.get_access<sycl::access::mode::discard_write>(cgh,
-                                                           sycl::range<1>{(size_t)(hi - lo + 1)});
+                                                           sycl::range<1>{(size_t)work});
       // Invoke the kernel, which is also a lambda here (but could be a functor
       // Needs to be by-value, since we'll transition to the device address space
       cgh.parallel_for(sycl::nd_range<1>{global, local}, [=](sycl::nd_item<1> tid_info) {
         // This is the kernel body
         size_t tid = tid_info.get_global_linear_id();
-        if (tid < nelem) {
+        if (tid < work) {
           // Use the accessors
           C_acc[tid] = A_acc[tid] + B_acc[tid];
         }
