@@ -7,8 +7,13 @@ CXX=clang++
 CHPL_CUDA_PATH=../../tool-installs/cuda-talos/
 CHPL_BIN_PATH=../../tool-installs/chapel-1.28.0-build-talos/bin/
 
+CHPL_GPUAPI_PATH=../../tool-installs/chapel-gpu-talos
+CHPL_GPUAPI_MODULES=-M $(CHPL_GPUAPI_PATH)/install/modules $(CHPL_GPUAPI_PATH)/install/include/GPUAPI.h
+
 CHPL:= CHPL_CUDA_PATH=$(CHPL_CUDA_PATH) $(CHPL_BIN_PATH)/chpl
-CHPL_FLAGS := $(CHPL_FLAGS) 
+CHPL_FLAGS := $(CHPL_FLAGS) $(CHPL_GPUAPI_MODULES) 
+
+#CHPL_FLAGS := $(CHPL_FLAGS) -g --no-optimize --devel
 
 CUDA=nvcc
 CUDA_C_FLAGS:= $(CUDA_C_FLAGS) $(CFLAGS)
@@ -25,20 +30,20 @@ HIPSYCL_C_FLAGS := $(HIPSYCL_C_FLAGS) $(SYCL_C_FLAGS) --hipsycl-targets="omp;cud
 HIPSYCL_LD_FLAGS := $(HIPSYCL_LD_FLAGS) $(SYCL_LD_FLAGS) -Wl,-rpath=$(HIPSYCL_PATH)/lib -L$(HIPSYCL_PATH)/lib -lhipSYCL-rt -fopenmp=libomp
 HIPSYCL_CHPL_LD_FLAGS := --ldflags -Wl,-rpath=$(HIPSYCL_PATH)/lib -L$(HIPSYCL_PATH)/lib -lhipSYCL-rt --ldflags -fopenmp=libomp
 
-vecAdd: vectorAdd.chpl
-	$(CHPL) vectorAdd.chpl -o vecAdd $(CHPL_FLAGS)
+vecAdd: vectorAdd.chpl vecAdd-Chapel.chpl
+	$(CHPL) vectorAdd.chpl vecAdd-Chapel.chpl -o vecAdd $(CHPL_FLAGS)
 
-vecAdd-cuda: vectorAdd.chpl vecAdd-cu.o vecAdd.h
-	$(CHPL) vectorAdd.chpl vecAdd.h -o vecAdd-cuda $(CHPL_FLAGS) vecAdd-cu.o
+vecAdd-cuda: vectorAdd.chpl vecAdd-extern.chpl vecAdd.h vecAdd-cu.o vecAdd.h
+	$(CHPL) vectorAdd.chpl vecAdd-extern.chpl vecAdd.h -o vecAdd-cuda $(CHPL_FLAGS) vecAdd-cu.o
 
 vecAdd-ocl: vectorAdd.chpl vecAdd-ocl.o vecAdd.cl
 	$(CHPL) vecAdd-ocl.o $(CHPL_FLAGS)
 
-vecAdd-MetaCL: vectorAdd.chpl vecAdd-MetaCL.o metacl_vecAdd.o metamorph_shim.o
-	$(CHPL) vectorAdd.chpl vecAdd.h -o vecAdd-MetaCL $(CHPL_FLAGS) vecAdd-MetaCL.o metacl_vecAdd.o metamorph_shim.o $(OPENCL_LD_FLAGS)
+vecAdd-MetaCL: vectorAdd.chpl vecAdd-extern.chpl vecAdd.h vecAdd-MetaCL.o metacl_vecAdd.o metamorph_shim.o
+	$(CHPL) vectorAdd.chpl vecAdd-extern.chpl vecAdd.h -o vecAdd-MetaCL $(CHPL_FLAGS) vecAdd-MetaCL.o metacl_vecAdd.o metamorph_shim.o $(OPENCL_LD_FLAGS)
 
-vecAdd-HipSYCL: vecAdd-hipSYCL.o
-	$(CHPL) vectorAdd.chpl vecAdd.h -o vecAdd-HipSYCL $(CHPL_FLAGS) vecAdd-hipSYCL.o $(HIPSYCL_CHPL_LD_FLAGS)
+vecAdd-HipSYCL: vectorAdd.chpl vecAdd-extern.chpl vecAdd.h vecAdd-hipSYCL.o
+	$(CHPL) vectorAdd.chpl vecAdd-extern.chpl vecAdd.h -o vecAdd-HipSYCL $(CHPL_FLAGS) vecAdd-hipSYCL.o $(HIPSYCL_CHPL_LD_FLAGS)
 
 vecAdd-dpcpp: vecAdd-dpcpp.o
 	$(CHPL) vecAdd-dpcpp.o vectorAdd.chpl -o vecAdd-dpcpp $(CHPL_FLAGS)
