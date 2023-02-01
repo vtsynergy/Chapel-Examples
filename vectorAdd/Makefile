@@ -5,7 +5,7 @@ CC=clang
 CXX=clang++
 
 CHPL_CUDA_PATH=../../tool-installs/cuda-talos/
-CHPL_BIN_PATH=../../tool-installs/chapel-1.28.0-build-talos/bin/
+CHPL_BIN_PATH=../../tool-installs/chapel-latest-talos/bin/
 
 CHPL_GPUAPI_PATH=../../tool-installs/chapel-gpu-talos
 CHPL_GPUAPI_MODULES=-M $(CHPL_GPUAPI_PATH)/install/modules $(CHPL_GPUAPI_PATH)/install/include/GPUAPI.h
@@ -29,6 +29,9 @@ SYCL_LD_FLAGS := $(SYCL_LD_FLAGS) $(LDFLAGS)
 HIPSYCL_C_FLAGS := $(HIPSYCL_C_FLAGS) $(SYCL_C_FLAGS) --hipsycl-targets="omp;cuda:sm_86" --cuda-path=$(CHPL_CUDA_PATH)
 HIPSYCL_LD_FLAGS := $(HIPSYCL_LD_FLAGS) $(SYCL_LD_FLAGS) -Wl,-rpath=$(HIPSYCL_PATH)/lib -L$(HIPSYCL_PATH)/lib -lhipSYCL-rt -fopenmp=libomp
 HIPSYCL_CHPL_LD_FLAGS := --ldflags -Wl,-rpath=$(HIPSYCL_PATH)/lib -L$(HIPSYCL_PATH)/lib -lhipSYCL-rt --ldflags -fopenmp=libomp
+
+.PHONY: all
+all: vecAdd vecAdd-cuda vecAdd-MetaCL vecAdd-HipSYCL
 
 vecAdd: vectorAdd.chpl vecAdd-Chapel.chpl
 	$(CHPL) vectorAdd.chpl vecAdd-Chapel.chpl -o vecAdd $(CHPL_FLAGS)
