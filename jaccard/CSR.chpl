@@ -24,35 +24,23 @@ module CSR {
 
   //Can we make this a generic type to accept both 32- and 64-bit vertices/edges/weights?
   record CSR {
-    param numEdges : int(64);
-    param numVerts : int(64);
-    var isWeighted : bool;
+    var numEdges : int(64);
+    var numVerts : int(64);
+    param isWeighted : bool;
     var isZeroIndexed : bool;
     var isDirected : bool;
     var hasReverseEdges : bool;
-    var isVertexT64 : bool;
-    var isEdgeT64 : bool;
-    var isWeightT64 : bool;
-    //FIXME: These should become references once that's allowed, but for now we'll have to have the record store the whole array.
-    //FIXME: error: References cannot be members of classes or records yet.
-    //ref indices : int(?);
-    //ref offsets : int(?);
-    //ref weights : int(?);
-    //FIXME: I also can't declare arrays that are variable w.r.t. the value of another var member of the record 
-    //FIXME: error: illegal type index expression 'int(64)(_uninstantiated)'
-    //FIXME: note: primitive type 'int(64)' cannot be used in an index expression
-    //var indices : [1..numEdges] int(?);
-    //var offsets : [1..numVerts+1] int(?);
-    //var weights : [1..numEdges] real(?);
-    //FIXME: But I also can't put un-sized arrays into a record
-    //FIXME: syntax error: near ']'
-    //var indices : [] int(?);
-    //var offsets : [] int(?);
-    //var weights : [] real(?);
-    //But what if numEdges and numVerts are params?
-    var indices : [1..numEdges] int(?);
-    var offsets : [1..numVerts+1] int(?);
-    var weights : [1..numEdges] real(?);
+    param isVertexT64 : bool;
+    param isEdgeT64 : bool;
+    param isWeightT64 : bool;
+    var idxDom : domain(1) = {1..numEdges};
+    var indices : [idxDom] int(if isVertexT64 then 64 else 32);
+    var offDom : domain(1) = {1..(numVerts+1)};
+    var offsets : [offDom] int(if isEdgeT64 then 64 else 32);
+    var weightDom : domain(1) = {1..(if isWeighted then numEdges else 0)}; //Degenerate if we don't have weights
+    var weights : [idxDom] int(if isWeightT64 then 64 else 32);
+ //   var offsets : [1..numVerts+1] int(?);
+ //   var weights : [1..numEdges] real(?);
   }
 
   //Need to read CSRv2-formatted data
