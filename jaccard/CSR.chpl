@@ -15,10 +15,11 @@ module CSR {
   };
 
   record CSR_file_header {
-    var binaryFormatVersion : int(64);
-    var numVerts : int(64);
-    var numEdges : int(64);
-    var flags : CSR_header_flags;
+    var binaryFormatVersion : int(64) = 1;
+    var numVerts : int(64) = 0;
+    var numEdges : int(64) = 0;
+    //Because of how Chapel casts to enums we can't store "all false (0)" or ORed values in an enum, so the flags field has to be treated as int(64)
+    var flags : int(64) = 0;
   }
 
   //Can we make this a generic type to accept both 32- and 64-bit vertices/edges/weights?
