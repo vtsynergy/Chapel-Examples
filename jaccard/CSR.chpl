@@ -104,6 +104,43 @@ prototype module CSR {
   } */
   }
 
+//The new parser returns the elaborated CSR type, so that the application can use it directly to construct
+//proc parseCSRHeader(in header : CSR_file_header, out binFmtVers : int(64), out numVerts : int(64), out numEdges : int(64), out isWeighted : bool, out isZeroIndexed : bool, out isDirected : bool, out hasReverseEdges : bool, out isVertexT64 : bool, out isEdgeT64: bool, ref isWeightT64: bool) : type {
+proc parseCSRHeader(in header : CSR_file_header) type {
+  type myType = CSR;
+  writeln(myType : string);
+  myType = CSR(false);
+  writeln(myType : string);
+  return myType;
+}
+
+proc readCSRArrays(in readChannel, type CSR_spec): CSR_spec {
+  //  var myCSR = new CSR_spec();
+  
+}
+
+proc CSRUser(in inFile : string) {
+    ///File operations (which they are reworking as of 1.29.0)
+    //FIXME: Add error handling
+    //FIXME: Reimplement using readThis methods
+    //Open
+    var readFile = IO.open(inFile, IO.iomode.r);
+    //Create a read channel
+    var readChannel = readFile.reader(kind = IO.iokind.native, locking = false, hints = IO.ioHintSet.sequential);
+    //Read the fixed-size header
+
+    //  var header = {0, 0, 0, 0} : CSR_file_header; // "illegal cast from DefaultAssociativeDom(int(64),true) to CSR_file_header" // so I guess don't initialize here?
+    var header : CSR_file_header;
+    var expectedBinFmt = header.binaryFormatVersion; //FIXME I can't figure out a better way to grab the default integral constant from the record type, other than just copying it from an entity that has been default initialized
+    readChannel.read(header);
+    //readChannel.read(header.binaryFormatVersion);
+    writeln(header);
+    //Assert that the binary format version is the one we're expecting (Vers. 2)
+    
+assert(header.binaryFormatVersion == expectedBinFmt, "Binary version of ", inFile, " is ", header.binaryFormatVersion, " but expected ", expectedBinFmt);
+    type myCSRType = parseCSRHeader(header);
+    var myCSR = readCSRArrays(readChannel, myCSRType);
+}
 //I couldn't figure out how to do the equivalent of gradually-nesting specializations so here we are, a 16-way split for the 4 boolean bits
 //proc CSRFactory(numEdges : int(64), numVerts : int(64), isWeighted : bool, isZeroIndexed : bool, isDirected : bool, hasReverseEdges : bool) : CSR {
 /* proc CSRFactory(numEdges : int(64), numVerts : int(64), isWeighted : bool, isZeroIndexed : bool, isDirected : bool, hasReverseEdges : bool) :CSR(isWeighted = true) where isWeighted == true {
@@ -112,10 +149,11 @@ prototype module CSR {
 proc CSRFactory(numEdges : int(64), numVerts : int(64), isWeighted : bool, isZeroIndexed : bool, isDirected : bool, hasReverseEdges : bool) :CSR(isWeighted = false) where isWeighted == false {
     return new CSR(numEdges, numVerts, false, isZeroIndexed, isDirected, hasReverseEdges);
 }*/
-
+/*
+OLD HEADER PARSE
   //Need to read CSRv2-formatted data
   //FIXME, idiomatically, can we use type reflection to infer/coerce the size of the counting variables?
-  proc parseCSRHeader(header : CSR_file_header, ref binFmtVers : int(64), ref numVerts : int(64), ref numEdges : int(64), ref isWeighted : bool, ref isZeroIndexed : bool, ref isDirected : bool, ref hasReverseEdges : bool, ref isVertexT64 : bool, ref isEdgeT64 : bool, ref isWeightT64 : bool) {
+  proci parseCSRHeader(header : CSR_file_header, ref binFmtVers : int(64), ref numVerts : int(64), ref numEdges : int(64), ref isWeighted : bool, ref isZeroIndexed : bool, ref isDirected : bool, ref hasReverseEdges : bool, ref isVertexT64 : bool, ref isEdgeT64 : bool, ref isWeightT64 : bool) {
     //Directly map the counting variables, using coersion if necessary
     //Bitmask the flags field
     if ((header.flags & CSR_header_flags.isWeighted) != 0) { isWeighted = true; }
@@ -126,6 +164,7 @@ proc CSRFactory(numEdges : int(64), numVerts : int(64), isWeighted : bool, isZer
     if ((header.flags & CSR_header_flags.isEdgeT64) != 0) { isEdgeT64 = true; }
     if ((header.flags & CSR_header_flags.isWeightT64) != 0) { isWeightT64 = true; }
   }
+
 
   proc readCSRFile(inFile : string): CSR {
   //proc readCSRFile(inFile : string): void {
@@ -190,23 +229,23 @@ assert(header.binaryFormatVersion == expectedBinFmt, "Binary version of ", inFil
     );
   */
     if ( (header.flags & (CSR_header_flags.isWeighted : int(64)) != 0) ) {
-    return new CSR(
-      numEdges = header.numEdges,
-      numVerts = header.numVerts,
-      isWeighted = true,
-      isZeroIndexed = (header.flags & (CSR_header_flags.isZeroIndexed : int(64)) != 0),
-      isDirected = (header.flags & (CSR_header_flags.isDirected : int(64)) != 0),
-      hasReverseEdges = (header.flags & (CSR_header_flags.hasReverseEdges : int(64)) != 0)
-    );
+      return new CSR(
+        numEdges = header.numEdges,
+        numVerts = header.numVerts,
+        isWeighted = true,
+        isZeroIndexed = (header.flags & (CSR_header_flags.isZeroIndexed : int(64)) != 0),
+        isDirected = (header.flags & (CSR_header_flags.isDirected : int(64)) != 0),
+        hasReverseEdges = (header.flags & (CSR_header_flags.hasReverseEdges : int(64)) != 0)
+       );
     } else {
-    return new CSR(
-      numEdges = header.numEdges,
-      numVerts = header.numVerts,
-      isWeighted = false,
-      isZeroIndexed = (header.flags & (CSR_header_flags.isZeroIndexed : int(64)) != 0),
-      isDirected = (header.flags & (CSR_header_flags.isDirected : int(64)) != 0),
-      hasReverseEdges = (header.flags & (CSR_header_flags.hasReverseEdges : int(64)) != 0)
-    );
+      return new CSR(
+        numEdges = header.numEdges,
+        numVerts = header.numVerts,
+        isWeighted = false,
+        isZeroIndexed = (header.flags & (CSR_header_flags.isZeroIndexed : int(64)) != 0),
+        isDirected = (header.flags & (CSR_header_flags.isDirected : int(64)) != 0),
+        hasReverseEdges = (header.flags & (CSR_header_flags.hasReverseEdges : int(64)) != 0)
+      );
     }
 
 /*    return new CSR(
@@ -223,6 +262,7 @@ assert(header.binaryFormatVersion == expectedBinFmt, "Binary version of ", inFil
 */
     //return new CSR(0, 0, false, false, false, false, false, false, false, {0}: int(32), {0}: int(32), {0.0} : real(32));
   }
+*/
 
 
   //Need to write CSRv2-formatted data
