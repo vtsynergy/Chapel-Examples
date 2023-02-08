@@ -32,88 +32,40 @@ prototype module CSR {
     var isZeroIndexed : bool;
     var isDirected : bool;
     var hasReverseEdges : bool;
-//    param isVertexT64 : bool;
-//    param isEdgeT64 : bool;
-//    param isWeightT64 : bool;
-//    var idxDom : domain(1) = {1..numEdges};
-//    var indices : [idxDom] int(if isVertexT64 then 64 else 32);
-//    var offDom : domain(1) = {1..(numVerts+1)};
-//    var offsets : [offDom] int(if isEdgeT64 then 64 else 32);
+    param isVertexT64 : bool;
+    param isEdgeT64 : bool;
+    param isWeightT64 : bool;
+    var idxDom : domain(1) = {1..numEdges};
+    var indices : [idxDom] int(if isVertexT64 then 64 else 32);
+    var offDom : domain(1) = {1..(numVerts+1)};
+    var offsets : [offDom] int(if isEdgeT64 then 64 else 32);
     var weightDom : domain(1) = {1..(if isWeighted then numEdges else 0)}; //Degenerate if we don't have weights
-//    var weights : [idxDom] int(if isWeightT64 then 64 else 32);
- //   var offsets : [1..numVerts+1] int(?);
- //   var weights : [1..numEdges] real(?);
-  //To get a similar pattern to template specialization from C++, I'm going to need a sequence of inits
-/*
-//./CSR.chpl:48: In initializer:
-//./CSR.chpl:48: error: invalid where clause
-  proc init(isWeighted : bool, numEdges : int(64), numVerts : int(64), isZeroIndexed : bool, isDirected : bool, hasReverseEdges :bool) where isWeighted == true {
-    //Do nothing, let it auto init
-  } 
-  proc init(isWeighted : bool, numEdges : int(64), numVerts : int(64), isZeroIndexed : bool, isDirected : bool, hasReverseEdges :bool) where isWeighted == false {
-    //Do nothing, let it auto init
   }
-*/
-/*
-//./CSR.chpl:145: error: unresolved call 'CSR.init(numEdges=int(64), numVerts=int(64), isWeighted=bool, isZeroIndexed=bool, isDirected=bool, hasReverseEdges=bool)'
-//./CSR.chpl:54: note: this candidate did not match: CSR.init(numEdges: int(64), numVerts: int(64), isZeroIndexed: bool, isDirected: bool, hasReverseEdges: bool) [185042]
-//./CSR.chpl:145: note: because call uses named argument isWeighted
-//./CSR.chpl:54: note: but function contains no formal named isWeighted
-//./CSR.chpl:145: note: other candidates are:
-//./CSR.chpl:57: note:   CSR.init(numEdges: int(64), numVerts: int(64), isZeroIndexed: bool, isDirected: bool, hasReverseEdges: bool) [185082]
-  proc init(numEdges : int(64), numVerts : int(64), isZeroIndexed : bool, isDirected : bool, hasReverseEdges :bool) where isWeighted == true {
-    //Do nothing, let it auto init
-  } 
-  proc init(numEdges : int(64), numVerts : int(64), isZeroIndexed : bool, isDirected : bool, hasReverseEdges :bool) where isWeighted == false {
-    //Do nothing, let it auto init
-  }
-*/
-/*
-//./CSR.chpl:164: error: unresolved call 'CSR.init(numEdges=int(64), numVerts=int(64), isWeighted=bool, isZeroIndexed=bool, isDirected=bool, hasReverseEdges=bool)'
-//./CSR.chpl:72: note: this candidate did not match: CSR.init(param isWeighted: bool, numEdges: int(64), numVerts: int(64), isZeroIndexed: bool, isDirected: bool, hasReverseEdges: bool) [185042]
-//./CSR.chpl:164: note: because non-param actual argument #3
-//./CSR.chpl:72: note: is passed to param formal 'param isWeighted: bool [185049]'
-//./CSR.chpl:164: note: other candidates are:
-//./CSR.chpl:75: note:   CSR.init(param isWeighted: bool, numEdges: int(64), numVerts: int(64), isZeroIndexed: bool, isDirected: bool, hasReverseEdges: bool) [185086]
-  proc init(param isWeighted : bool, numEdges : int(64), numVerts : int(64), isZeroIndexed : bool, isDirected : bool, hasReverseEdges :bool) where isWeighted == true {
-    //Do nothing, let it auto init
-  } 
-  proc init(param isWeighted : bool, numEdges : int(64), numVerts : int(64), isZeroIndexed : bool, isDirected : bool, hasReverseEdges :bool) where isWeighted == false {
-    //Do nothing, let it auto init
-  }
-*/
-/*
-//./CSR.chpl:85: error: cannot default-initialize a variable with generic type
-//./CSR.chpl:85: note: 'this [185045]' has generic type 'CSR'
-//./CSR.chpl:85: note: cannot find initialization point to split-init this variable
-//./CSR.chpl:85: note: 'this [185045]' is used here before it is initialized
-  proc init(isWeighted : bool, numEdges : int(64), numVerts : int(64), isZeroIndexed : bool, isDirected : bool, hasReverseEdges :bool) where this.isWeighted == true {
-    //Do nothing, let it auto init
-  } 
-  proc init(isWeighted : bool, numEdges : int(64), numVerts : int(64), isZeroIndexed : bool, isDirected : bool, hasReverseEdges :bool) where this.isWeighted == false {
-    //Do nothing, let it auto init
-  }
-*/
-/*
-  proc init(isWeighted : bool) {
-    if (isWeighted) {
-      this.isWeighted = true ;
-    } else {
-       this.isWeighted = false;
-    }
-  } */
-  }
-
 //The new parser returns the elaborated CSR type, so that the application can use it directly to construct
 //proc parseCSRHeader(in header : CSR_file_header, out binFmtVers : int(64), out numVerts : int(64), out numEdges : int(64), out isWeighted : bool, out isZeroIndexed : bool, out isDirected : bool, out hasReverseEdges : bool, out isVertexT64 : bool, out isEdgeT64: bool, ref isWeightT64: bool) : type {
-proc parseCSRHeader(in header : CSR_file_header) type {
+/*proc parseCSRHeader(in header : CSR_file_header) type {
+  if ((header.flags & (CSR_header_flags.isWeighted : int(64))) != 0) { //weighted branch
+    return CSR(isWeighted = false, isVertexT64 = false, isEdgeT64 = false, isWeightT64 = false);
+  } else { //Unweighted branch
+    return CSR(isWeighted = true, isVertexT64 = false, isEdgeT64 = false, isWeightT64 = false);
+  }
+  
+  /*
+    if ( { isWeighted = true; }
+    if ((header.flags & CSR_header_flags.isZeroIndexed) != 0) { isZeroIndexed = true; }
+    if ((header.flags & CSR_header_flags.isDirected) != 0) { isDirected = true; }
+    if ((header.flags & CSR_header_flags.hasReverseEdges) != 0) { hasReverseEdges = true; }
+    if ((header.flags & CSR_header_flags.isVertexT64) != 0) { isVertexT64 = true; }
+    if ((header.flags & CSR_header_flags.isEdgeT64) != 0) { isEdgeT64 = true; }
+    if ((header.flags & CSR_header_flags.isWeightT64) != 0) { isWeightT64 = true; }
   type myType = CSR;
   writeln(myType : string);
   myType = CSR(false);
   writeln(myType : string);
   return myType;
+ */
 }
-
+*/
 proc readCSRArrays(in readChannel, type CSR_spec): CSR_spec {
   //  var myCSR = new CSR_spec();
   
@@ -138,8 +90,14 @@ proc CSRUser(in inFile : string) {
     //Assert that the binary format version is the one we're expecting (Vers. 2)
     
 assert(header.binaryFormatVersion == expectedBinFmt, "Binary version of ", inFile, " is ", header.binaryFormatVersion, " but expected ", expectedBinFmt);
+  /*
     type myCSRType = parseCSRHeader(header);
-    var myCSR = readCSRArrays(readChannel, myCSRType);
+    writeln(myCSRType :string);
+    var h2 = header;
+    h2.flags = CSR_header_flags.isWeighted : int(64);
+    writeln(parseCSRHeader(h2) : string);
+  */
+//    var myCSR = readCSRArrays(readChannel, myCSRType);
 }
 //I couldn't figure out how to do the equivalent of gradually-nesting specializations so here we are, a 16-way split for the 4 boolean bits
 //proc CSRFactory(numEdges : int(64), numVerts : int(64), isWeighted : bool, isZeroIndexed : bool, isDirected : bool, hasReverseEdges : bool) : CSR {
@@ -156,13 +114,6 @@ OLD HEADER PARSE
   proci parseCSRHeader(header : CSR_file_header, ref binFmtVers : int(64), ref numVerts : int(64), ref numEdges : int(64), ref isWeighted : bool, ref isZeroIndexed : bool, ref isDirected : bool, ref hasReverseEdges : bool, ref isVertexT64 : bool, ref isEdgeT64 : bool, ref isWeightT64 : bool) {
     //Directly map the counting variables, using coersion if necessary
     //Bitmask the flags field
-    if ((header.flags & CSR_header_flags.isWeighted) != 0) { isWeighted = true; }
-    if ((header.flags & CSR_header_flags.isZeroIndexed) != 0) { isZeroIndexed = true; }
-    if ((header.flags & CSR_header_flags.isDirected) != 0) { isDirected = true; }
-    if ((header.flags & CSR_header_flags.hasReverseEdges) != 0) { hasReverseEdges = true; }
-    if ((header.flags & CSR_header_flags.isVertexT64) != 0) { isVertexT64 = true; }
-    if ((header.flags & CSR_header_flags.isEdgeT64) != 0) { isEdgeT64 = true; }
-    if ((header.flags & CSR_header_flags.isWeightT64) != 0) { isWeightT64 = true; }
   }
 
 
