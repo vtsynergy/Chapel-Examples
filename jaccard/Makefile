@@ -15,7 +15,7 @@ CHPL_FLAGS := $(CHPL_FLAGS) -g --devel
 
 
 .PHONY: all
-all: jaccard
+all: jaccard readCSRHeader
 
 jaccard: jaccard.chpl CSR.m EdgeCentric.m CuGraph.m
 	$(CHPL) jaccard.chpl -o jaccard $(CHPL_FLAGS)
@@ -28,6 +28,9 @@ EdgeCentric.m: EdgeCentric.chpl
 
 CuGraph.m: CuGraph.chpl
 	$(CHPL) CuGraph.chpl -o CuGraph.m $(CHPL_FLAGS)
+
+readCSRHeader: readCSRHeader.chpl CSR.m
+	$(CHPL) readCSRHeader.chpl -o readCSRHeader $(CHPL_FLAGS)
 
 .PHONY: clean
 clean:
