@@ -41,6 +41,92 @@ prototype module CSR {
     var offsets : [offDom] int(if isEdgeT64 then 64 else 32);
     var weightDom : domain(1) = {1..(if isWeighted then numEdges else 0)}; //Degenerate if we don't have weights
   }
+
+//Lets figure out how to do progressive resolution. i.e. do one param per overload
+/*
+//This ladder doesn't work because params and tuples are not friends, apparently
+proc OverloadMe(param compileTime : 4*bool) {
+  type myCSR = CSR(compileTime);
+  writeln(myCSR : string);
+  if (compileTime(0)) {
+    //Do some stuff
+  } else {
+    if (compileTime(1)) {
+      //Different stuff
+    }
+  }
+}
+proc OverloadMe(param compileTime : 3*bool, in runTime : 1*bool) {
+  if (runTime(0)) {
+    OverloadMe((compileTime, true));
+  } else {
+    OverloadMe((compileTime, false));
+  }
+}
+proc OverloadMe(param compileTime : 2*bool, in runTime : 2*bool) {
+  if (runTime(0)) {
+    OverloadMe((compileTime, true), runTime(1));
+  } else {
+    OverloadMe((compileTime, false), runTime(1));
+  }
+}
+proc OverloadMe(param compileTime : 1*bool, in runTime : 3*bool) {
+  if (runTime(0)) {
+    OverloadMe((compileTime, true), (runTime(1), runTime(2)));
+  } else {
+    OverloadMe((compileTime, false), (runTime(1), runTime(2)));
+  }
+}
+proc OverloadMe(in runTime : 4*bool) {
+  if (runTime(0)) {
+    OverloadMe((true,), (runTime(1), runTime(2), runTime(3)));
+  } else {
+    OverloadMe((false,), (runTime(1), runTime(2), runTime(3)));
+  }
+}
+*/
+
+proc OverloadMe(param parm1 : bool, param parm2 : bool, param parm3 : bool, param parm4 : bool) {
+  type myCSR = CSR(parm1, parm2, parm3, parm4);
+  writeln(myCSR : string);
+  if (parm1) {
+    //Do some stuff
+  } else {
+    if (parm2) {
+      //Different stuff
+    }
+  }
+}
+proc OverloadMe(param parm1 : bool, param parm2 : bool, param parm3 : bool, in runTime : 1*bool) {
+  if (runTime(0)) {
+    OverloadMe(parm1, parm2, parm3, true);
+  } else {
+    OverloadMe(parm1, parm2, parm3, false);
+  }
+}
+proc OverloadMe(param parm1 : bool, param parm2 : bool, in runTime : 2*bool) {
+  if (runTime(0)) {
+    OverloadMe(parm1, parm2, true, (runTime(1),));
+  } else {
+    OverloadMe(parm1, parm2, false, (runTime(1),));
+  }
+}
+proc OverloadMe(param parm1 : bool, in runTime : 3*bool) {
+  if (runTime(0)) {
+    OverloadMe(parm1, true, (runTime(1), runTime(2)));
+  } else {
+    OverloadMe(parm1, false, (runTime(1), runTime(2)));
+  }
+}
+proc OverloadMe(in runTime : 4*bool) {
+  if (runTime(0)) {
+    OverloadMe(true, (runTime(1), runTime(2), runTime(3)));
+  } else {
+    OverloadMe(false, (runTime(1), runTime(2), runTime(3)));
+  }
+} 
+
+
 //The new parser returns the elaborated CSR type, so that the application can use it directly to construct
 //proc parseCSRHeader(in header : CSR_file_header, out binFmtVers : int(64), out numVerts : int(64), out numEdges : int(64), out isWeighted : bool, out isZeroIndexed : bool, out isDirected : bool, out hasReverseEdges : bool, out isVertexT64 : bool, out isEdgeT64: bool, ref isWeightT64: bool) : type {
 /*proc parseCSRHeader(in header : CSR_file_header) type {
@@ -88,6 +174,10 @@ proc CSRUser(in inFile : string) {
     //readChannel.read(header.binaryFormatVersion);
     writeln(header);
     //Assert that the binary format version is the one we're expecting (Vers. 2)
+    for i in 0..15 do {
+      writeln(i, " ", i & 1, " ", i & 2, " ", i & 4, " ", i & 8);
+      OverloadMe((i & 1 != 0, i & 2 != 0, i & 4 != 0, i & 8 != 0));
+    }
     
 assert(header.binaryFormatVersion == expectedBinFmt, "Binary version of ", inFile, " is ", header.binaryFormatVersion, " but expected ", expectedBinFmt);
   /*
