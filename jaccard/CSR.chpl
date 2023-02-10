@@ -134,30 +134,21 @@ proc MakeCSR(in isWeighted : bool, in isVertexT64 : bool, in isEdgeT64 : bool, i
 
 
 //The new parser returns the elaborated CSR type, so that the application can use it directly to construct
-//proc parseCSRHeader(in header : CSR_file_header, out binFmtVers : int(64), out numVerts : int(64), out numEdges : int(64), out isWeighted : bool, out isZeroIndexed : bool, out isDirected : bool, out hasReverseEdges : bool, out isVertexT64 : bool, out isEdgeT64: bool, ref isWeightT64: bool) : type {
-/*proc parseCSRHeader(in header : CSR_file_header) type {
-  if ((header.flags & (CSR_header_flags.isWeighted : int(64))) != 0) { //weighted branch
-    return CSR(isWeighted = false, isVertexT64 = false, isEdgeT64 = false, isWeightT64 = false);
-  } else { //Unweighted branch
-    return CSR(isWeighted = true, isVertexT64 = false, isEdgeT64 = false, isWeightT64 = false);
-  }
-  
-  /*
-    if ( { isWeighted = true; }
-    if ((header.flags & CSR_header_flags.isZeroIndexed) != 0) { isZeroIndexed = true; }
-    if ((header.flags & CSR_header_flags.isDirected) != 0) { isDirected = true; }
-    if ((header.flags & CSR_header_flags.hasReverseEdges) != 0) { hasReverseEdges = true; }
-    if ((header.flags & CSR_header_flags.isVertexT64) != 0) { isVertexT64 = true; }
-    if ((header.flags & CSR_header_flags.isEdgeT64) != 0) { isEdgeT64 = true; }
-    if ((header.flags & CSR_header_flags.isWeightT64) != 0) { isWeightT64 = true; }
-  type myType = CSR;
-  writeln(myType : string);
-  myType = CSR(false);
-  writeln(myType : string);
-  return myType;
- */
+proc parseCSRHeader(in header : CSR_file_header,out binFmtVers : int(64), out numVerts : int(64), out numEdges : int(64),
+    out isWeighted : bool, out isZeroIndexed : bool, out isDirected : bool, out hasReverseEdges : bool,
+    out isVertexT64 : bool, out isEdgeT64: bool, ref isWeightT64: bool) : CSR_descriptor {
+  binFmtVers = header.binaryFormatVersion;
+  numVerts = header.numVerts;
+  numEdges = header.numEdges; 
+  if ((header.flags & (CSR_header_flags.isWeighted : int(64))) != 0) { isWeighted = true; }
+  if ((header.flags & (CSR_header_flags.isZeroIndexed : int(64))) != 0) { isZeroIndexed = true; }
+  if ((header.flags & (CSR_header_flags.isDirected : int(64))) != 0) { isDirected = true; }
+  if ((header.flags & (CSR_header_flags.hasReverseEdges : int(64))) != 0) { hasReverseEdges = true; }
+  if ((header.flags & (CSR_header_flags.isVertexT64 : int(64))) != 0) { isVertexT64 = true; }
+  if ((header.flags & (CSR_header_flags.isEdgeT64 : int(64))) != 0) { isEdgeT64 = true; }
+  if ((header.flags & (CSR_header_flags.isWeightT64 : int(64))) != 0) { isWeightT64 = true; }
+  return new CSR_descriptor(isWeighted, isVertexT64, isEdgeT64, isWeightT64);
 }
-*/
 proc readCSRArrays(in readChannel, type CSR_spec): CSR_spec {
   //  var myCSR = new CSR_spec();
   
@@ -179,14 +170,27 @@ proc CSRUser(in inFile : string) {
     readChannel.read(header);
     //readChannel.read(header.binaryFormatVersion);
     writeln(header);
-    //Assert that the binary format version is the one we're expecting (Vers. 2)
-    for i in 0..15 do {
+    var actualBinFmt : int(64);
+    var numVerts : int(64);
+    var numEdges : int(64);
+    var isWeighted : bool;
+    var isZeroIndexed : bool;
+    var isDirected : bool;
+    var hasReverseEdges : bool;
+    var isVertexT64 : bool;
+    var isEdgeT64 : bool;
+    var isWeightT64 : bool;
+    var myCSR = parseCSRHeader(header, actualBinFmt, numVerts, numEdges, isWeighted, isZeroIndexed, isDirected, hasReverseEdges, isVertexT64, isEdgeT64, isWeightT64);
+    writeln(myCSR);
+    writeln(actualBinFmt, " ", numVerts, " ", numEdges, " ", isWeighted, " ", isZeroIndexed, " ", isDirected, " ", hasReverseEdges, " ", isVertexT64, " ", isEdgeT64, " ", isWeightT64, " ");
+/*    for i in 0..15 do {
       writeln(i, " ", i & 1, " ", i & 2, " ", i & 4, " ", i & 8);
       var myCSR = MakeCSR(i & 1 != 0, i & 2 != 0, i & 4 != 0, i & 8 != 0) : CSR_handle;
       writeln(myCSR);
     }
-    
-assert(header.binaryFormatVersion == expectedBinFmt, "Binary version of ", inFile, " is ", header.binaryFormatVersion, " but expected ", expectedBinFmt);
+*/
+    //Assert that the binary format version is the one we're expecting (Vers. 2)
+assert(actualBinFmt == expectedBinFmt, "Binary version of ", inFile, " is ", header.binaryFormatVersion, " but expected ", expectedBinFmt);
   /*
     type myCSRType = parseCSRHeader(header);
     writeln(myCSRType :string);
