@@ -1,6 +1,7 @@
 //Has to be prototype because the IO calls throw. Apparently
 prototype module CSR {
   use IO; //Need for file ops
+  use CTypes; //Need for handle's void pointer
   //Need to implement a record for the CSRv2 header format
   // This might be a pain because it doesn't look like Chapel has bitfields, so we will need to create a bitmask enum to make operations simpler
 
@@ -24,6 +25,40 @@ prototype module CSR {
     var flags : int(64) = 0;
   }
 
+  //Runtime type descriptor
+  record CSR_descriptor {
+//    var numEdges : int(64);
+//    var numVerts : int(64);
+    var isWeighted : bool;
+    var isVertexT64 : bool;
+    var isEdgeT64 : bool;
+    var isWeightT64 : bool;
+    //
+   proc init=(rhs : 4*bool) {
+      this.isWeighted = rhs(0);
+      this.isVertexT64 = rhs(1);
+      this.isEdgeT64 = rhs(2);
+      this.isWeightT64 = rhs(3);
+    }
+   proc init=(rhs : CSR_descriptor) {
+      this.isWeighted = rhs.isWeighted;
+      this.isVertexT64 = rhs.isVertexT64;
+      this.isEdgeT64 = rhs.isEdgeT64;
+      this.isWeightT64 = rhs.isWeightT64;
+    }
+    operator =(ref lhs : CSR_descriptor, rhs : CSR_descriptor) {
+      lhs.isWeighted = rhs.isWeighted;
+      lhs.isVertexT64 = rhs.isVertexT64;
+      lhs.isEdgeT64 = rhs.isEdgeT64;
+      lhs.isWeightT64 = rhs.isWeightT64;
+    }
+  }
+  //Opaque handle
+  record CSR_handle {
+    var desc : CSR_descriptor;
+    var data : c_void_ptr;
+  }
+
   //Can we make this a generic type to accept both 32- and 64-bit vertices/edges/weights?
   record CSR {
     var numEdges : int(64);
@@ -42,87 +77,58 @@ prototype module CSR {
     var weightDom : domain(1) = {1..(if isWeighted then numEdges else 0)}; //Degenerate if we don't have weights
   }
 
-//Lets figure out how to do progressive resolution. i.e. do one param per overload
-/*
-//This ladder doesn't work because params and tuples are not friends, apparently
-proc OverloadMe(param compileTime : 4*bool) {
-  type myCSR = CSR(compileTime);
-  writeln(myCSR : string);
-  if (compileTime(0)) {
-    //Do some stuff
-  } else {
-    if (compileTime(1)) {
-      //Different stuff
-    }
-  }
-}
-proc OverloadMe(param compileTime : 3*bool, in runTime : 1*bool) {
-  if (runTime(0)) {
-    OverloadMe((compileTime, true));
-  } else {
-    OverloadMe((compileTime, false));
-  }
-}
-proc OverloadMe(param compileTime : 2*bool, in runTime : 2*bool) {
-  if (runTime(0)) {
-    OverloadMe((compileTime, true), runTime(1));
-  } else {
-    OverloadMe((compileTime, false), runTime(1));
-  }
-}
-proc OverloadMe(param compileTime : 1*bool, in runTime : 3*bool) {
-  if (runTime(0)) {
-    OverloadMe((compileTime, true), (runTime(1), runTime(2)));
-  } else {
-    OverloadMe((compileTime, false), (runTime(1), runTime(2)));
-  }
-}
-proc OverloadMe(in runTime : 4*bool) {
-  if (runTime(0)) {
-    OverloadMe((true,), (runTime(1), runTime(2), runTime(3)));
-  } else {
-    OverloadMe((false,), (runTime(1), runTime(2), runTime(3)));
-  }
-}
-*/
 
-proc OverloadMe(param parm1 : bool, param parm2 : bool, param parm3 : bool, param parm4 : bool) {
-  type myCSR = CSR(parm1, parm2, parm3, parm4);
-  writeln(myCSR : string);
-  if (parm1) {
-    //Do some stuff
+proc NewCSRHandle(type CSR_type : CSR(?)): CSR_handle {
+  var retCSR = new CSR_type();
+  var retCast = c_ptrTo(retCSR);
+  var retHandle : CSR_handle;
+  retHandle.desc = new CSR_descriptor(CSR_type.isWeighted, CSR_type.isVertexT64, CSR_type.isEdgeT64, CSR_type.isWeightT64);
+  retHandle.data = (retCast : c_void_ptr);
+  return retHandle;
+}
+
+proc ReinterpretCSRHandle(type CSR_type: CSR(?), in handle : CSR_handle) : CSR_type {
+
+  assert(handle.desc.isWeighted == CSR_type.isWeighted &&
+    handle.desc.isVertexT64 == CSR_type.isWeighted &&
+    handle.desc.isEdgeT64 == CSR_type.isWeighted &&
+    handle.desc.isWeightT64 == CSR_type.isWeighted,
+    "Provided CSR_handle: ", handle : string, " incompatible with reinterpreted type: ", CSR_type : string);
+}
+
+//This ladder lets us take the runtime booleans and translate them into a call
+// to the right compile-time instantiation of the CSR type
+//We then pass the opaque handle up to be passed around by the functions that
+// don't really need to know the internals of the type
+proc MakeCSR(param isWeighted : bool, param isVertexT64 : bool, param isEdgeT64 : bool, param isWeightT64 : bool) :CSR_handle {
+  return NewCSRHandle(CSR(isWeighted, isVertexT64, isEdgeT64, isWeightT64));
+}
+proc MakeCSR(param isWeighted : bool, param isVertexT64 : bool, param isEdgeT64 : bool, in isWeightT64 : bool) :CSR_handle {
+  if (isWeightT64) {
+    return MakeCSR(isWeighted, isVertexT64, isEdgeT64, true);
   } else {
-    if (parm2) {
-      //Different stuff
-    }
+    return MakeCSR(isWeighted, isVertexT64, isEdgeT64, false);
+  }
+} 
+proc MakeCSR(param isWeighted : bool, param isVertexT64 : bool, in isEdgeT64 : bool, in isWeightT64 : bool) :CSR_handle {
+  if (isEdgeT64) {
+    return MakeCSR(isWeighted, isVertexT64, true, isWeightT64);
+  } else {
+    return MakeCSR(isWeighted, isVertexT64, false, isWeightT64);
   }
 }
-proc OverloadMe(param parm1 : bool, param parm2 : bool, param parm3 : bool, in runTime : 1*bool) {
-  if (runTime(0)) {
-    OverloadMe(parm1, parm2, parm3, true);
+proc MakeCSR(param isWeighted : bool, in isVertexT64 : bool, in isEdgeT64 : bool, in isWeightT64 : bool) :CSR_handle {
+  if (isVertexT64) {
+    return MakeCSR(isWeighted, true, isEdgeT64, isWeightT64);
   } else {
-    OverloadMe(parm1, parm2, parm3, false);
+    return MakeCSR(isWeighted, false, isEdgeT64, isWeightT64);
   }
 }
-proc OverloadMe(param parm1 : bool, param parm2 : bool, in runTime : 2*bool) {
-  if (runTime(0)) {
-    OverloadMe(parm1, parm2, true, (runTime(1),));
+proc MakeCSR(in isWeighted : bool, in isVertexT64 : bool, in isEdgeT64 : bool, in isWeightT64 : bool) :CSR_handle {
+  if (isWeighted) {
+    return MakeCSR(true, isVertexT64, isEdgeT64, isWeightT64);
   } else {
-    OverloadMe(parm1, parm2, false, (runTime(1),));
-  }
-}
-proc OverloadMe(param parm1 : bool, in runTime : 3*bool) {
-  if (runTime(0)) {
-    OverloadMe(parm1, true, (runTime(1), runTime(2)));
-  } else {
-    OverloadMe(parm1, false, (runTime(1), runTime(2)));
-  }
-}
-proc OverloadMe(in runTime : 4*bool) {
-  if (runTime(0)) {
-    OverloadMe(true, (runTime(1), runTime(2), runTime(3)));
-  } else {
-    OverloadMe(false, (runTime(1), runTime(2), runTime(3)));
+    return MakeCSR(false, isVertexT64, isEdgeT64, isWeightT64);
   }
 } 
 
@@ -176,7 +182,8 @@ proc CSRUser(in inFile : string) {
     //Assert that the binary format version is the one we're expecting (Vers. 2)
     for i in 0..15 do {
       writeln(i, " ", i & 1, " ", i & 2, " ", i & 4, " ", i & 8);
-      OverloadMe((i & 1 != 0, i & 2 != 0, i & 4 != 0, i & 8 != 0));
+      var myCSR = MakeCSR(i & 1 != 0, i & 2 != 0, i & 4 != 0, i & 8 != 0) : CSR_handle;
+      writeln(myCSR);
     }
     
 assert(header.binaryFormatVersion == expectedBinFmt, "Binary version of ", inFile, " is ", header.binaryFormatVersion, " but expected ", expectedBinFmt);
