@@ -1,7 +1,7 @@
 module EdgeCentric {
   use CSR;
 
-  proc EC_Jaccard(type inType : CSR, in graph : inType, type outType : real(?), outWeights : [] outType) {
+  proc EC_Jaccard(type inType : unmanaged CSR, in graph : inType, type outType : real(?), outWeights : [] outType) {
     //Do stuff
     writeln("Edge Centric");
     writeln(inType : string);

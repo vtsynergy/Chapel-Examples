@@ -35,18 +35,18 @@ assert(outFile != "", "Must provide output file with '--outFile=<pathToFile>'");
     //do VC stuff
   } else {
     //Do EC stuff
-    var myBlandCSR : CSR(false, false, false, false);
+    var myBlandCSR : unmanaged CSR(false, false, false, false)?;
     var myBlandWeightsDom : domain(1) = {1..10};
     var myBlandWeights : [myBlandWeightsDom] real(32);
-    EC_Jaccard(CSR(false, false, false, false), myBlandCSR, real(32), myBlandWeights); 
-    var myBlandCSR2 : CSR(true, true, true, true);
+//    EC_Jaccard(CSR(false, false, false, false), myBlandCSR, real(32), myBlandWeights); 
+    var myBlandCSR2 : unmanaged CSR(true, true, true, true)?;
     var myBlandWeightsDom2 : domain(1) = {1..10};
     var myBlandWeights2 : [myBlandWeightsDom2] real(32);
-    EC_Jaccard(CSR(true, true, true, true), myBlandCSR2, real(32), myBlandWeights2); 
-    var myBlandCSR3 : CSR(isVertexT64 = true, isEdgeT64=true, false, false);
+//    EC_Jaccard(CSR(true, true, true, true), myBlandCSR2, real(32), myBlandWeights2); 
+    var myBlandCSR3 : unmanaged CSR(isVertexT64 = true, isEdgeT64=true, false, false)?;
     var myBlandWeightsDom3 : domain(1) = {1..10};
     var myBlandWeights3 : [myBlandWeightsDom3] real(32);
-    EC_Jaccard(CSR(isVertexT64 = true, isEdgeT64=true, false, false), myBlandCSR3, real(32), myBlandWeights3); 
+//    EC_Jaccard(CSR(isVertexT64 = true, isEdgeT64=true, false, false), myBlandCSR3, real(32), myBlandWeights3); 
   }
   }
 }
