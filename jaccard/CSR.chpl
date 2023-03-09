@@ -166,25 +166,25 @@ proc MakeCSR(in isWeighted : bool, in isVertexT64 : bool, in isEdgeT64 : bool, i
   }
 } 
 
-proc ReinterpretCSRHandle(type CSR_type: CSR(?), in handle : CSR_handle) : unmanaged CSR_type {
-  var retCSR : unmanaged CSR_type;
+proc ReinterpretCSRHandle(type CSR_type: unmanaged CSR(?), in handle : CSR_handle) : CSR_type {
+  var retCSR : CSR_type;
 
   local {
     assert(handle.desc.isWeighted == CSR_type.isWeighted &&
-      handle.desc.isVertexT64 == CSR_type.isWeighted &&
-      handle.desc.isEdgeT64 == CSR_type.isWeighted &&
-      handle.desc.isWeightT64 == CSR_type.isWeighted,
+      handle.desc.isVertexT64 == CSR_type.isVertexT64 &&
+      handle.desc.isEdgeT64 == CSR_type.isEdgeT64 &&
+      handle.desc.isWeightT64 == CSR_type.isWeightT64,
       "Provided CSR_handle: ", handle : string, " incompatible with reinterpreted type: ", CSR_type : string);
 
     //Open the handle
-    retCSR = ((handle.data : unmanaged CSR_type?) : unmanaged CSR_type); //Have to cast twice here, not allowed to directly go from c_void_ptr to non-nillable class, because it eliminates the chance for a runtime check of nil value
+    retCSR = ((handle.data : CSR_type?) : CSR_type); //Have to cast twice here, not allowed to directly go from c_void_ptr to non-nillable class, because it eliminates the chance for a runtime check of nil value
   }
   return retCSR;
 }
 
 proc ReadCSRArrays(param isWeighted : bool, param isVertexT64 : bool, param isEdgeT64 : bool, param isWeightT64 : bool, in handle : CSR_handle, in channel) {
   //Bring the handle into concrete type
-  var myCSR = ReinterpretCSRHandle(CSR(isWeighted, isVertexT64, isEdgeT64, isWeightT64), handle);
+  var myCSR = ReinterpretCSRHandle(unmanaged CSR(isWeighted, isVertexT64, isEdgeT64, isWeightT64), handle);
   channel.read(myCSR.offsets);
   channel.read(myCSR.indices);
   channel.read(myCSR.weights);
@@ -220,7 +220,7 @@ proc ReadCSRArrays(in handle : CSR_handle, in channel) {
 } 
 proc writeCSRArrays(param isWeighted : bool, param isVertexT64 : bool, param isEdgeT64 : bool, param isWeightT64 : bool, in handle : CSR_handle, in channel) {
   //Bring the handle into concrete type
-  var myCSR = ReinterpretCSRHandle(CSR(isWeighted, isVertexT64, isEdgeT64, isWeightT64), handle);
+  var myCSR = ReinterpretCSRHandle(unmanaged CSR(isWeighted, isVertexT64, isEdgeT64, isWeightT64), handle);
   channel.write(myCSR.offsets);
   channel.write(myCSR.indices);
   //It will write a singleton zero if the array is degenerate (unweighted), don't do that
