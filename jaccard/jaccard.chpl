@@ -20,33 +20,26 @@ module Jaccard {
   config const useWeighted = false : bool;
 
   proc main() {
-  //Make sure we have some data to process and somewhere to put it
-assert(inFile != "", "Must provide input file with '--inFile=<pathToFile>'");
-assert(outFile != "", "Must provide output file with '--outFile=<pathToFile>'");
+    //Make sure we have some data to process and somewhere to put it
+    assert(inFile != "", "Must provide input file with '--inFile=<pathToFile>'");
+    assert(outFile != "", "Must provide output file with '--outFile=<pathToFile>'");
 
-  //Read the input data into a CSR member
-  //readCSRFile(inFile);
-  CSRUser(inFile);
-//  var inCSR = readCSRFile(inFile);
     //Read the input file and set up host arrays (use generic methods to support different FP types)
+    var isZeroIndexed : bool;
+    var isDirected : bool;
+    var hasReverseEdges : bool;
+    var inCSR = readCSRFile(inFile, isZeroIndexed, isDirected, hasReverseEdges);
+    //Create an empty output CSR of the same type as the input, the kernel pipelines will populate it
+    var outCSR = MakeCSR(isWeighted = true, isVertexT64 = inCSR.desc.isVertexT64, isEdgeT64 = inCSR.desc.isEdgeT64, isWeightT64 = inCSR.desc.isWeightT64);
+    writeCSRFile(outFile, inCSR, isZeroIndexed, isDirected, hasReverseEdges); //TODO replace with outCSR once we have a copy operator for CSR handles
     //Launch the selected kernel pipeline
+    if (useCUGraph) {
+      //do VC stuff
+      //VC_jaccard(inCSR)
+    } else {
+      //Do EC stuff
+    //    EC_Jaccard(CSR(isVertexT64 = true, isEdgeT64=true, false, false), myBlandCSR3, real(32), myBlandWeights3); 
+    }
     //Write the output file
-  if (useCUGraph) {
-    //do VC stuff
-  } else {
-    //Do EC stuff
-    var myBlandCSR : unmanaged CSR(false, false, false, false)?;
-    var myBlandWeightsDom : domain(1) = {1..10};
-    var myBlandWeights : [myBlandWeightsDom] real(32);
-//    EC_Jaccard(CSR(false, false, false, false), myBlandCSR, real(32), myBlandWeights); 
-    var myBlandCSR2 : unmanaged CSR(true, true, true, true)?;
-    var myBlandWeightsDom2 : domain(1) = {1..10};
-    var myBlandWeights2 : [myBlandWeightsDom2] real(32);
-//    EC_Jaccard(CSR(true, true, true, true), myBlandCSR2, real(32), myBlandWeights2); 
-    var myBlandCSR3 : unmanaged CSR(isVertexT64 = true, isEdgeT64=true, false, false)?;
-    var myBlandWeightsDom3 : domain(1) = {1..10};
-    var myBlandWeights3 : [myBlandWeightsDom3] real(32);
-//    EC_Jaccard(CSR(isVertexT64 = true, isEdgeT64=true, false, false), myBlandCSR3, real(32), myBlandWeights3); 
-  }
   }
 }

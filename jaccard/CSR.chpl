@@ -184,9 +184,6 @@ proc ReinterpretCSRHandle(type CSR_type: CSR(?), in handle : CSR_handle) : unman
 proc ReadCSRArrays(param isWeighted : bool, param isVertexT64 : bool, param isEdgeT64 : bool, param isWeightT64 : bool, in handle : CSR_handle, in channel) {
   //Bring the handle into concrete type
   var myCSR = ReinterpretCSRHandle(CSR(isWeighted, isVertexT64, isEdgeT64, isWeightT64), handle);
-  //expand the arrays as needed
-  //myCSR.idxDom = {0..numEdges-1
-  writeln("Preparing to read arrays into CSR: ", myCSR);
   channel.read(myCSR.offsets);
   channel.read(myCSR.indices);
   channel.read(myCSR.weights);
@@ -243,7 +240,8 @@ class food {
 };
 
 
-proc CSRUser(in inFile : string) {
+//FIXME, remove these three bools one the writer is encapsulated in CSR.writeThis
+proc readCSRFile(in inFile : string, out isZeroIndexed : bool, out isDirected : bool, out hasReverseEdges : bool) : CSR_handle {
 
     ///File operations (which they are reworking as of 1.29.0)
     //FIXME: Add error handling
@@ -270,140 +268,15 @@ proc CSRUser(in inFile : string) {
     var isEdgeT64 : bool;
     var isWeightT64 : bool;
     var myCSR = parseCSRHeader(header, actualBinFmt, numVerts, numEdges, isWeighted, isZeroIndexed, isDirected, hasReverseEdges, isVertexT64, isEdgeT64, isWeightT64);
+    //Assert that the binary format version is the one we're expecting (Vers. 2)
+    assert(actualBinFmt == expectedBinFmt, "Binary version of ", inFile, " is ", header.binaryFormatVersion, " but expected ", expectedBinFmt);
     var myHandle = MakeCSR(myCSR.isWeighted, myCSR.isVertexT64, myCSR.isEdgeT64, myCSR.isWeightT64, numEdges, numVerts);
     ReadCSRArrays(myHandle, readChannel);
-/*    for i in 0..15 do {
-      writeln(i, " ", i & 1, " ", i & 2, " ", i & 4, " ", i & 8);
-      var myCSR = MakeCSR(i & 1 != 0, i & 2 != 0, i & 4 != 0, i & 8 != 0) : CSR_handle;
-      writeln(myCSR);
-    }
-*/
-    //Assert that the binary format version is the one we're expecting (Vers. 2)
-assert(actualBinFmt == expectedBinFmt, "Binary version of ", inFile, " is ", header.binaryFormatVersion, " but expected ", expectedBinFmt);
-  /*
-    type myCSRType = parseCSRHeader(header);
-    writeln(myCSRType :string);
-    var h2 = header;
-    h2.flags = CSR_header_flags.isWeighted : int(64);
-    writeln(parseCSRHeader(h2) : string);
-  */
-//    var myCSR = readCSRArrays(readChannel, myCSRType);
+    //TODO anything to gracefully close the channel/file?
+    return myHandle;
 }
-//I couldn't figure out how to do the equivalent of gradually-nesting specializations so here we are, a 16-way split for the 4 boolean bits
-//proc CSRFactory(numEdges : int(64), numVerts : int(64), isWeighted : bool, isZeroIndexed : bool, isDirected : bool, hasReverseEdges : bool) : CSR {
-/* proc CSRFactory(numEdges : int(64), numVerts : int(64), isWeighted : bool, isZeroIndexed : bool, isDirected : bool, hasReverseEdges : bool) :CSR(isWeighted = true) where isWeighted == true {
-    return new CSR(numEdges, numVerts, true, isZeroIndexed, isDirected, hasReverseEdges);
-}
-proc CSRFactory(numEdges : int(64), numVerts : int(64), isWeighted : bool, isZeroIndexed : bool, isDirected : bool, hasReverseEdges : bool) :CSR(isWeighted = false) where isWeighted == false {
-    return new CSR(numEdges, numVerts, false, isZeroIndexed, isDirected, hasReverseEdges);
-}*/
-/*
-OLD HEADER PARSE
-  //Need to read CSRv2-formatted data
-  //FIXME, idiomatically, can we use type reflection to infer/coerce the size of the counting variables?
-  proci parseCSRHeader(header : CSR_file_header, ref binFmtVers : int(64), ref numVerts : int(64), ref numEdges : int(64), ref isWeighted : bool, ref isZeroIndexed : bool, ref isDirected : bool, ref hasReverseEdges : bool, ref isVertexT64 : bool, ref isEdgeT64 : bool, ref isWeightT64 : bool) {
-    //Directly map the counting variables, using coersion if necessary
-    //Bitmask the flags field
-  }
 
 
-  proc readCSRFile(inFile : string): CSR {
-  //proc readCSRFile(inFile : string): void {
-
-    ///File operations (which they are reworking as of 1.29.0)
-    //FIXME: Add error handling
-    //FIXME: Reimplement using readThis methods
-    //Open
-    var readFile = IO.open(inFile, IO.iomode.r);
-    //Create a read channel
-    var readChannel = readFile.reader(kind = IO.iokind.native, locking = false, hints = IO.ioHintSet.sequential);
-    //Read the fixed-size header
-
-    //  var header = {0, 0, 0, 0} : CSR_file_header; // "illegal cast from DefaultAssociativeDom(int(64),true) to CSR_file_header" // so I guess don't initialize here?
-    var header : CSR_file_header;
-    var expectedBinFmt = header.binaryFormatVersion; //FIXME I can't figure out a better way to grab the default integral constant from the record type, other than just copying it from an entity that has been default initialized
-    readChannel.read(header);
-    //readChannel.read(header.binaryFormatVersion);
-    writeln(header);
-    //Assert that the binary format version is the one we're expecting (Vers. 2)
-    
-assert(header.binaryFormatVersion == expectedBinFmt, "Binary version of ", inFile, " is ", header.binaryFormatVersion, " but expected ", expectedBinFmt);
-
-    //We can't even construct the CSR return record without having the header for typing information
-/*    type csr_vert;
-    type csr_edge;
-    type csr_weight;
-    if (header.flags & (CSR_header_flags.isVertexT64 : int(64)) == 0) {
-      csr_vert = int(32);
-    } else {
-      csr_vert = int(64);
-    }
-    if (header.flags & CSR_header_flags.isEdgeT64 == 0) {
-      csr_edge = int(32);
-    } else {
-      csr_edge = int(64);
-    }
-    if (header.flags & CSR_header_flags.isWeightT64 == 0) {
-      csr_weight = int(32);
-    } else {
-      csr_weight = int(64);
-    }
-    var myCSR : CSR(indices = csr_vert, offsets = csr_edge, weights = csr_weight);
-*/
-/*    return CSRFactory(
-      numEdges = header.numEdges,
-      numVerts = header.numVerts,
-      isWeighted = (header.flags & (CSR_header_flags.isWeighted : int(64)) != 0),
-      isZeroIndexed = (header.flags & (CSR_header_flags.isZeroIndexed : int(64)) != 0),
-      isDirected = (header.flags & (CSR_header_flags.isDirected : int(64)) != 0),
-      hasReverseEdges = (header.flags & (CSR_header_flags.hasReverseEdges : int(64)) != 0)
-    );
-*/
-/*    
-    return new CSR(
-      numEdges = header.numEdges,
-      numVerts = header.numVerts,
-      isWeighted = (header.flags & (CSR_header_flags.isWeighted : int(64)) != 0),
-      isZeroIndexed = (header.flags & (CSR_header_flags.isZeroIndexed : int(64)) != 0),
-      isDirected = (header.flags & (CSR_header_flags.isDirected : int(64)) != 0),
-      hasReverseEdges = (header.flags & (CSR_header_flags.hasReverseEdges : int(64)) != 0)
-    );
-  */
-    if ( (header.flags & (CSR_header_flags.isWeighted : int(64)) != 0) ) {
-      return new CSR(
-        numEdges = header.numEdges,
-        numVerts = header.numVerts,
-        isWeighted = true,
-        isZeroIndexed = (header.flags & (CSR_header_flags.isZeroIndexed : int(64)) != 0),
-        isDirected = (header.flags & (CSR_header_flags.isDirected : int(64)) != 0),
-        hasReverseEdges = (header.flags & (CSR_header_flags.hasReverseEdges : int(64)) != 0)
-       );
-    } else {
-      return new CSR(
-        numEdges = header.numEdges,
-        numVerts = header.numVerts,
-        isWeighted = false,
-        isZeroIndexed = (header.flags & (CSR_header_flags.isZeroIndexed : int(64)) != 0),
-        isDirected = (header.flags & (CSR_header_flags.isDirected : int(64)) != 0),
-        hasReverseEdges = (header.flags & (CSR_header_flags.hasReverseEdges : int(64)) != 0)
-      );
-    }
-
-/*    return new CSR(
-      numEdges = header.numEdges,
-      numVerts = header.numVerts,
-      isWeighted = (header.flags & (CSR_header_flags.isWeighted : int(64)) != 0),
-      isZeroIndexed = (header.flags & (CSR_header_flags.isZeroIndexed : int(64)) != 0),
-      isDirected = (header.flags & (CSR_header_flags.isDirected : int(64)) != 0),
-      hasReverseEdges = (header.flags & (CSR_header_flags.hasReverseEdges : int(64)) != 0),
-      isVertexT64 = (header.flags & (CSR_header_flags.isVertexT64 : int(64)) != 0),
-      isEdgeT64 = (header.flags & (CSR_header_flags.isEdgeT64 : int(64)) != 0),
-      isWeightT64 = (header.flags & (CSR_header_flags.isEdgeT64 : int(64)) != 0)
-    );
-*/
-    //return new CSR(0, 0, false, false, false, false, false, false, false, {0}: int(32), {0}: int(32), {0.0} : real(32));
-  }
-*/
 
 
   //Need to write CSRv2-formatted data
