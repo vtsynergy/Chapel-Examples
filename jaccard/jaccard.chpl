@@ -30,7 +30,7 @@ module Jaccard {
     var hasReverseEdges : bool;
     var inCSR = readCSRFile(inFile, isZeroIndexed, isDirected, hasReverseEdges);
     //Create an empty output CSR of the same type as the input, the kernel pipelines will populate it
-    var outCSR = MakeCSR(isWeighted = true, isVertexT64 = inCSR.desc.isVertexT64, isEdgeT64 = inCSR.desc.isEdgeT64, isWeightT64 = inCSR.desc.isWeightT64);
+    var outCSR = MakeCSR(isWeighted = true, isVertexT64 = inCSR.desc.isVertexT64, isEdgeT64 = inCSR.desc.isEdgeT64, isWeightT64 = inCSR.desc.isWeightT64, inCSR.desc.numEdges, inCSR.desc.numVerts);
     //Launch the selected kernel pipeline
     if (useCUGraph) {
       //do VC stuff
