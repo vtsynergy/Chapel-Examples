@@ -31,15 +31,14 @@ module Jaccard {
     var inCSR = readCSRFile(inFile, isZeroIndexed, isDirected, hasReverseEdges);
     //Create an empty output CSR of the same type as the input, the kernel pipelines will populate it
     var outCSR = MakeCSR(isWeighted = true, isVertexT64 = inCSR.desc.isVertexT64, isEdgeT64 = inCSR.desc.isEdgeT64, isWeightT64 = inCSR.desc.isWeightT64);
-    writeCSRFile(outFile, inCSR, isZeroIndexed, isDirected, hasReverseEdges); //TODO replace with outCSR once we have a copy operator for CSR handles
     //Launch the selected kernel pipeline
     if (useCUGraph) {
       //do VC stuff
       //VC_jaccard(inCSR)
     } else {
-      //Do EC stuff
-    //    EC_Jaccard(CSR(isVertexT64 = true, isEdgeT64=true, false, false), myBlandCSR3, real(32), myBlandWeights3); 
+      EdgeCentric.jaccard(inCSR, outCSR);
     }
     //Write the output file
+    writeCSRFile(outFile, outCSR, isZeroIndexed, isDirected, hasReverseEdges); //TODO replace with outCSR once we have a copy operator for CSR handles
   }
 }

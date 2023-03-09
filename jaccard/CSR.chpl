@@ -69,6 +69,7 @@ prototype module CSR {
 
   //Can we make this a generic type to accept both 32- and 64-bit vertices/edges/weights?
   class CSR {
+    //TODO Atharva wanted me to confirm this structure can deal with directed graphs for TC, so that we don't have as much redundant work
     var numEdges : int(64);
     var numVerts : int(64);
     param isWeighted : bool;
