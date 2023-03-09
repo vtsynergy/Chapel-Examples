@@ -33,8 +33,7 @@ module Jaccard {
     var outCSR = MakeCSR(isWeighted = true, isVertexT64 = inCSR.desc.isVertexT64, isEdgeT64 = inCSR.desc.isEdgeT64, isWeightT64 = inCSR.desc.isWeightT64, inCSR.desc.numEdges, inCSR.desc.numVerts);
     //Launch the selected kernel pipeline
     if (useCUGraph) {
-      //do VC stuff
-      //VC_jaccard(inCSR)
+      CuGraph.jaccard(inCSR, outCSR);
     } else {
       EdgeCentric.jaccard(inCSR, outCSR);
     }
