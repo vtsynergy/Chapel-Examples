@@ -7,14 +7,14 @@ prototype module CSR {
 
   //Datatypes to support file read
   enum CSR_header_flags {
-  // TODO give uint initializations of these
-    isWeighted = 1 << 63,
-    isZeroIndexed = 1 << 62,
-    isDirected = 1 << 61,
-    hasReverseEdges = 1 << 60,
-    isVertexT64 = 1 << 59,
-    isEdgeT64 = 1 << 58,
-    isWeightT64 = 1 << 57,
+  // C++ on linux seems to initialize the bits from LSB to MSB
+    isWeighted = 1 << 0,
+    isZeroIndexed = 1 << 1,
+    isDirected = 1 << 2,
+    hasReverseEdges = 1 << 3,
+    isVertexT64 = 1 << 4,
+    isEdgeT64 = 1 << 5,
+    isWeightT64 = 1 << 6,
   };
 
   record CSR_file_header {
@@ -93,6 +93,7 @@ prototype module CSR {
       if (f.binary()) { //We assume binary IO is for file writing and non-binary is for string
         //Do file writer
         //Construct a header and write it
+        
         //Print offsets, then indices, then weights
       } else {
         //Emulate the default class writeThis, but with truncated array prints, and a pointer
@@ -122,7 +123,7 @@ proc NewCSRHandle(type CSR_type : CSR(?), in numEdges : int(64), in numVerts : i
     retCSR.numEdges = numEdges;
     retCSR.numVerts = numVerts;
     var retCast = (retCSR : c_void_ptr); //In 2.0 this *may* become analagous to c_ptrTo(<someclass>) but it isn't yet
-    retHandle.desc = new CSR_descriptor(CSR_type.isWeighted, CSR_type.isVertexT64, CSR_type.isEdgeT64, CSR_type.isWeightT64);
+    retHandle.desc = new CSR_descriptor(CSR_type.isWeighted, CSR_type.isVertexT64, CSR_type.isEdgeT64, CSR_type.isWeightT64, numEdges, numVerts);
     retHandle.data = retCast;
   }
 
@@ -157,7 +158,7 @@ proc MakeCSR(param isWeighted : bool, in isVertexT64 : bool, in isEdgeT64 : bool
     return MakeCSR(isWeighted, false, isEdgeT64, isWeightT64, numEdges, numVerts);
   }
 }
-proc MakeCSR(in isWeighted : bool, in isVertexT64 : bool, in isEdgeT64 : bool, in isWeightT64 : bool, in numEdges : int(64), in numVerts : int(64)) :CSR_handle {
+proc MakeCSR(in isWeighted : bool, in isVertexT64 : bool, in isEdgeT64 : bool, in isWeightT64 : bool, in numEdges = 0 : int(64), in numVerts = 0 : int(64)) :CSR_handle {
   if (isWeighted) {
     return MakeCSR(true, isVertexT64, isEdgeT64, isWeightT64, numEdges, numVerts);
   } else {
@@ -217,6 +218,42 @@ proc ReadCSRArrays(in handle : CSR_handle, in channel) {
     ReadCSRArrays(false, handle, channel);
   }
 } 
+proc writeCSRArrays(param isWeighted : bool, param isVertexT64 : bool, param isEdgeT64 : bool, param isWeightT64 : bool, in handle : CSR_handle, in channel) {
+  //Bring the handle into concrete type
+  var myCSR = ReinterpretCSRHandle(CSR(isWeighted, isVertexT64, isEdgeT64, isWeightT64), handle);
+  channel.write(myCSR.offsets);
+  channel.write(myCSR.indices);
+  //It will write a singleton zero if the array is degenerate (unweighted), don't do that
+  if(isWeighted) { channel.write(myCSR.weights); }
+}
+proc writeCSRArrays(param isWeighted : bool, param isVertexT64 : bool, param isEdgeT64 : bool, in handle : CSR_handle, in channel) {
+  if (handle.desc.isWeightT64) {
+    writeCSRArrays(isWeighted, isVertexT64, isEdgeT64, true, handle, channel);
+  } else {
+    writeCSRArrays(isWeighted, isVertexT64, isEdgeT64, false, handle, channel);
+  }
+} 
+proc writeCSRArrays(param isWeighted : bool, param isVertexT64 : bool, in handle : CSR_handle, in channel) {
+  if (handle.desc.isEdgeT64) {
+    writeCSRArrays(isWeighted, isVertexT64, true, handle, channel);
+  } else {
+    writeCSRArrays(isWeighted, isVertexT64, false, handle, channel);
+  }
+}
+proc writeCSRArrays(param isWeighted : bool, in handle : CSR_handle, in channel) {
+  if (handle.desc.isVertexT64) {
+    writeCSRArrays(isWeighted, true, handle, channel);
+  } else {
+    writeCSRArrays(isWeighted, false, handle, channel);
+  }
+}
+proc writeCSRArrays(in handle : CSR_handle, in channel) {
+  if (handle.desc.isWeighted) {
+    writeCSRArrays(true, handle, channel);
+  } else {
+    writeCSRArrays(false, handle, channel);
+  }
+} 
 
 //The new parser returns the elaborated CSR type, so that the application can use it directly to construct
 proc parseCSRHeader(in header : CSR_file_header,out binFmtVers : int(64), out numVerts : int(64), out numEdges : int(64),
@@ -261,12 +298,13 @@ proc readCSRFile(in inFile : string, out isZeroIndexed : bool, out isDirected : 
     var numVerts : int(64);
     var numEdges : int(64);
     var isWeighted : bool;
-    var isZeroIndexed : bool;
-    var isDirected : bool;
-    var hasReverseEdges : bool;
+//    var isZeroIndexed : bool;
+//    var isDirected : bool;
+//    var hasReverseEdges : bool;
     var isVertexT64 : bool;
     var isEdgeT64 : bool;
     var isWeightT64 : bool;
+    //FIXME This is a CSR_descriptor, so we've got it, and the one in the eventual handle, we should really only have one
     var myCSR = parseCSRHeader(header, actualBinFmt, numVerts, numEdges, isWeighted, isZeroIndexed, isDirected, hasReverseEdges, isVertexT64, isEdgeT64, isWeightT64);
     //Assert that the binary format version is the one we're expecting (Vers. 2)
     assert(actualBinFmt == expectedBinFmt, "Binary version of ", inFile, " is ", header.binaryFormatVersion, " but expected ", expectedBinFmt);
@@ -276,6 +314,34 @@ proc readCSRFile(in inFile : string, out isZeroIndexed : bool, out isDirected : 
     return myHandle;
 }
 
+//FIXME I don't like having these three flags separate from the other 4 param bools, but they are not currently in the descriptor
+//Once the CSR class writeThis is implemented, we may not need to do anything with them, because it will have access to their values
+proc writeCSRFile(in outFile : string, in handle : CSR_handle, in isZeroIndexed : bool, in isDirected : bool, in hasReverseEdges : bool) {
+  //Open the file
+  var writeFile = IO.open(outFile, IO.iomode.cw);
+  //Create a write channel
+  var writeChannel = writeFile.writer(kind = IO.iokind.native, locking = false, hints = IO.ioHintSet.sequential);
+  //FIXME, encapsulate the below in the CSR class writeThis
+  //Create a header and write it
+  var header : CSR_file_header;
+  header.numVerts = handle.desc.numVerts;
+  header.numEdges = handle.desc.numEdges;
+  //flags
+  if (handle.desc.isWeighted) { header.flags |= (CSR_header_flags.isWeighted : int(64)); }
+  if (isZeroIndexed) { header.flags |= (CSR_header_flags.isZeroIndexed : int(64)); }
+  if (isDirected) { header.flags |= (CSR_header_flags.isDirected : int(64)); }
+  if (hasReverseEdges) { header.flags |= (CSR_header_flags.hasReverseEdges : int(64)); }
+  if (handle.desc.isVertexT64) { header.flags |= (CSR_header_flags.isVertexT64 : int(64)); }
+  if (handle.desc.isEdgeT64) { header.flags |= (CSR_header_flags.isEdgeT64 : int(64)); }
+  if (handle.desc.isWeightT64) { header.flags |= (CSR_header_flags.isWeightT64 : int(64)); }
+  writeChannel.write(header);
+  //Write the data arrays
+  writeCSRArrays(handle, writeChannel);
+  //offsets
+  //indices
+  //weights
+  //TODO anything to gracefully close the channel/file?
+}
 
 
 
