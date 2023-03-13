@@ -183,40 +183,45 @@ proc ReinterpretCSRHandle(type CSR_type: unmanaged CSR(?), in handle : CSR_handl
   return retCSR;
 }
 
-proc ReadCSRArrays(param isWeighted : bool, param isVertexT64 : bool, param isEdgeT64 : bool, param isWeightT64 : bool, in handle : CSR_handle, in channel) {
+proc ReadCSRArrays(param isWeighted : bool, param isVertexT64 : bool, param isEdgeT64 : bool, param isWeightT64 : bool, in handle : CSR_handle, in channel, in isZeroIndexed: bool, in isDirected : bool, in hasReverseEdges : bool) {
   //Bring the handle into concrete type
   var myCSR = ReinterpretCSRHandle(unmanaged CSR(isWeighted, isVertexT64, isEdgeT64, isWeightT64), handle);
+  //FIXME: These should be read in differently
+  myCSR.isZeroIndexed = isZeroIndexed;
+  myCSR.isDirected = isDirected;
+  myCSR.hasReverseEdges = hasReverseEdges;
+  //Read arrays 
   channel.read(myCSR.offsets);
   channel.read(myCSR.indices);
-  channel.read(myCSR.weights);
+  if (isWeighted) { channel.read(myCSR.weights); }
   writeln("After array read: ", myCSR);
 }
-proc ReadCSRArrays(param isWeighted : bool, param isVertexT64 : bool, param isEdgeT64 : bool, in handle : CSR_handle, in channel) {
+proc ReadCSRArrays(param isWeighted : bool, param isVertexT64 : bool, param isEdgeT64 : bool, in handle : CSR_handle, in channel, in isZeroIndexed: bool, in isDirected : bool, in hasReverseEdges : bool) {
   if (handle.desc.isWeightT64) {
-    ReadCSRArrays(isWeighted, isVertexT64, isEdgeT64, true, handle, channel);
+    ReadCSRArrays(isWeighted, isVertexT64, isEdgeT64, true, handle, channel, isZeroIndexed, isDirected, hasReverseEdges);
   } else {
-    ReadCSRArrays(isWeighted, isVertexT64, isEdgeT64, false, handle, channel);
+    ReadCSRArrays(isWeighted, isVertexT64, isEdgeT64, false, handle, channel, isZeroIndexed, isDirected, hasReverseEdges);
   }
 } 
-proc ReadCSRArrays(param isWeighted : bool, param isVertexT64 : bool, in handle : CSR_handle, in channel) {
+proc ReadCSRArrays(param isWeighted : bool, param isVertexT64 : bool, in handle : CSR_handle, in channel, in isZeroIndexed: bool, in isDirected : bool, in hasReverseEdges : bool) {
   if (handle.desc.isEdgeT64) {
-    ReadCSRArrays(isWeighted, isVertexT64, true, handle, channel);
+    ReadCSRArrays(isWeighted, isVertexT64, true, handle, channel, isZeroIndexed, isDirected, hasReverseEdges);
   } else {
-    ReadCSRArrays(isWeighted, isVertexT64, false, handle, channel);
+    ReadCSRArrays(isWeighted, isVertexT64, false, handle, channel, isZeroIndexed, isDirected, hasReverseEdges);
   }
 }
-proc ReadCSRArrays(param isWeighted : bool, in handle : CSR_handle, in channel) {
+proc ReadCSRArrays(param isWeighted : bool, in handle : CSR_handle, in channel, in isZeroIndexed: bool, in isDirected : bool, in hasReverseEdges : bool) {
   if (handle.desc.isVertexT64) {
-    ReadCSRArrays(isWeighted, true, handle, channel);
+    ReadCSRArrays(isWeighted, true, handle, channel, isZeroIndexed, isDirected, hasReverseEdges);
   } else {
-    ReadCSRArrays(isWeighted, false, handle, channel);
+    ReadCSRArrays(isWeighted, false, handle, channel, isZeroIndexed, isDirected, hasReverseEdges);
   }
 }
-proc ReadCSRArrays(in handle : CSR_handle, in channel) {
+proc ReadCSRArrays(in handle : CSR_handle, in channel, in isZeroIndexed: bool, in isDirected : bool, in hasReverseEdges : bool) {
   if (handle.desc.isWeighted) {
-    ReadCSRArrays(true, handle, channel);
+    ReadCSRArrays(true, handle, channel, isZeroIndexed, isDirected, hasReverseEdges);
   } else {
-    ReadCSRArrays(false, handle, channel);
+    ReadCSRArrays(false, handle, channel, isZeroIndexed, isDirected, hasReverseEdges);
   }
 } 
 proc writeCSRArrays(param isWeighted : bool, param isVertexT64 : bool, param isEdgeT64 : bool, param isWeightT64 : bool, in handle : CSR_handle, in channel) {
@@ -310,7 +315,7 @@ proc readCSRFile(in inFile : string, out isZeroIndexed : bool, out isDirected : 
     //Assert that the binary format version is the one we're expecting (Vers. 2)
     assert(actualBinFmt == expectedBinFmt, "Binary version of ", inFile, " is ", header.binaryFormatVersion, " but expected ", expectedBinFmt);
     var myHandle = MakeCSR(myCSR.isWeighted, myCSR.isVertexT64, myCSR.isEdgeT64, myCSR.isWeightT64, numEdges, numVerts);
-    ReadCSRArrays(myHandle, readChannel);
+    ReadCSRArrays(myHandle, readChannel, isZeroIndexed, isDirected, hasReverseEdges);
     //TODO anything to gracefully close the channel/file?
     return myHandle;
 }
