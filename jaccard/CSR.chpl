@@ -92,10 +92,24 @@ prototype module CSR {
     //writeThis is easier to implement because we already know the concrete type
     override proc writeThis(f) throws {
       if (f.binary()) { //We assume binary IO is for file writing and non-binary is for string
-        //Do file writer
         //Construct a header and write it
+        var header : CSR_file_header;
+        header.numVerts = numVerts;
+        header.numEdges = numEdges;
+        //flags
+        if (isWeighted) { header.flags |= (CSR_header_flags.isWeighted : int(64)); }
+        if (isZeroIndexed) { header.flags |= (CSR_header_flags.isZeroIndexed : int(64)); }
+        if (isDirected) { header.flags |= (CSR_header_flags.isDirected : int(64)); }
+        if (hasReverseEdges) { header.flags |= (CSR_header_flags.hasReverseEdges : int(64)); }
+        if (isVertexT64) { header.flags |= (CSR_header_flags.isVertexT64 : int(64)); }
+        if (isEdgeT64) { header.flags |= (CSR_header_flags.isEdgeT64 : int(64)); }
+        if (isWeightT64) { header.flags |= (CSR_header_flags.isWeightT64 : int(64)); }
+        f.write(header);
         
         //Print offsets, then indices, then weights
+        f.write(offsets);
+        f.write(indices);
+        if (isWeighted) { f.write(weights); }
       } else {
         //Emulate the default class writeThis, but with truncated array prints, and a pointer
         var ret = "" : string;
@@ -227,10 +241,12 @@ proc ReadCSRArrays(in handle : CSR_handle, in channel, in isZeroIndexed: bool, i
 proc writeCSRArrays(param isWeighted : bool, param isVertexT64 : bool, param isEdgeT64 : bool, param isWeightT64 : bool, in handle : CSR_handle, in channel) {
   //Bring the handle into concrete type
   var myCSR = ReinterpretCSRHandle(unmanaged CSR(isWeighted, isVertexT64, isEdgeT64, isWeightT64), handle);
-  channel.write(myCSR.offsets);
-  channel.write(myCSR.indices);
-  //It will write a singleton zero if the array is degenerate (unweighted), don't do that
-  if(isWeighted) { channel.write(myCSR.weights); }
+  writeln(myCSR);
+  channel.write(myCSR);
+//  channel.write(myCSR.offsets);
+//  channel.write(myCSR.indices);
+//  //It will write a singleton zero if the array is degenerate (unweighted), don't do that
+//  if(isWeighted) { channel.write(myCSR.weights); }
 }
 proc writeCSRArrays(param isWeighted : bool, param isVertexT64 : bool, param isEdgeT64 : bool, in handle : CSR_handle, in channel) {
   if (handle.desc.isWeightT64) {
@@ -328,24 +344,8 @@ proc writeCSRFile(in outFile : string, in handle : CSR_handle, in isZeroIndexed 
   //Create a write channel
   var writeChannel = writeFile.writer(kind = IO.iokind.native, locking = false, hints = IO.ioHintSet.sequential);
   //FIXME, encapsulate the below in the CSR class writeThis
-  //Create a header and write it
-  var header : CSR_file_header;
-  header.numVerts = handle.desc.numVerts;
-  header.numEdges = handle.desc.numEdges;
-  //flags
-  if (handle.desc.isWeighted) { header.flags |= (CSR_header_flags.isWeighted : int(64)); }
-  if (isZeroIndexed) { header.flags |= (CSR_header_flags.isZeroIndexed : int(64)); }
-  if (isDirected) { header.flags |= (CSR_header_flags.isDirected : int(64)); }
-  if (hasReverseEdges) { header.flags |= (CSR_header_flags.hasReverseEdges : int(64)); }
-  if (handle.desc.isVertexT64) { header.flags |= (CSR_header_flags.isVertexT64 : int(64)); }
-  if (handle.desc.isEdgeT64) { header.flags |= (CSR_header_flags.isEdgeT64 : int(64)); }
-  if (handle.desc.isWeightT64) { header.flags |= (CSR_header_flags.isWeightT64 : int(64)); }
-  writeChannel.write(header);
   //Write the data arrays
   writeCSRArrays(handle, writeChannel);
-  //offsets
-  //indices
-  //weights
   //TODO anything to gracefully close the channel/file?
 }
 
