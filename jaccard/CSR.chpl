@@ -27,15 +27,12 @@ prototype module CSR {
 
   //Runtime type descriptor
   record CSR_descriptor {
-//    var numEdges : int(64);
-//    var numVerts : int(64);
     var isWeighted : bool;
     var isVertexT64 : bool;
     var isEdgeT64 : bool;
     var isWeightT64 : bool;
     var numEdges : int(64);
     var numVerts : int(64);
-    //
    proc init=(rhs : (4*bool, 2*int)) {
       this.isWeighted = rhs(0);
       this.isVertexT64 = rhs(1);
@@ -263,11 +260,8 @@ proc ReadCSRArrays(in handle : CSR_handle, in channel, in isZeroIndexed: bool, i
 proc writeCSRHandle(param isWeighted : bool, param isVertexT64 : bool, param isEdgeT64 : bool, param isWeightT64 : bool, in handle : CSR_handle, in channel) {
   //Bring the handle into concrete type
   var myCSR = ReinterpretCSRHandle(unmanaged CSR(isWeighted, isVertexT64, isEdgeT64, isWeightT64), handle);
+  //Then write the concrete instance
   channel.write(myCSR);
-//  channel.write(myCSR.offsets);
-//  channel.write(myCSR.indices);
-//  //It will write a singleton zero if the array is degenerate (unweighted), don't do that
-//  if(isWeighted) { channel.write(myCSR.weights); }
 }
 proc writeCSRHandle(param isWeighted : bool, param isVertexT64 : bool, param isEdgeT64 : bool, in handle : CSR_handle, in channel) {
   if (handle.desc.isWeightT64) {
@@ -357,9 +351,7 @@ proc readCSRFile(in inFile : string, out isZeroIndexed : bool, out isDirected : 
     return myHandle;
 }
 
-//FIXME I don't like having these three flags separate from the other 4 param bools, but they are not currently in the descriptor
-//Once the CSR class writeThis is implemented, we may not need to do anything with them, because it will have access to their values
-proc writeCSRFile(in outFile : string, in handle : CSR_handle, in isZeroIndexed : bool, in isDirected : bool, in hasReverseEdges : bool) {
+proc writeCSRFile(in outFile : string, in handle : CSR_handle) {
   //Open the file
   var writeFile = IO.open(outFile, IO.iomode.cw);
   //Create a write channel

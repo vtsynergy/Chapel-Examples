@@ -7,11 +7,7 @@ module Jaccard {
 
   //Need to expose device selection to the command line
 
-  //Need to expose pipeline selection to the command line
-
   //Need to write a separate bridge module to the SYCL implementations (far later)
-
-  //Should probably wrap the kernel pipeline prototypes in separate modules
 
   config var inFile = "" : string;
   config var outFile  = "" : string;
@@ -38,6 +34,6 @@ module Jaccard {
       EdgeCentric.jaccard(inCSR, outCSR);
     }
     //Write the output file
-    writeCSRFile(outFile, inCSR, isZeroIndexed, isDirected, hasReverseEdges); //TODO replace with outCSR once we have a copy operator for CSR handles
+    writeCSRFile(outFile, inCSR); //TODO replace with outCSR once we have a copy operator for CSR handles
   }
 }
