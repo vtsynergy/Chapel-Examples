@@ -58,6 +58,41 @@ prototype module CSR {
       lhs.numVerts = rhs.numVerts;
     }
   }
+    //FIXME: These really belong to the CSR_handle record, but private cannot be applied to members yet
+    private proc writeCSRHandle(param isWeighted : bool, param isVertexT64 : bool, param isEdgeT64 : bool, param isWeightT64 : bool, in handle : CSR_handle, in channel) {
+      //Bring the handle into concrete type
+      var myCSR = ReinterpretCSRHandle(unmanaged CSR(isWeighted, isVertexT64, isEdgeT64, isWeightT64), handle);
+      //Then write the concrete instance
+      channel.write(myCSR);
+    }
+    private proc writeCSRHandle(param isWeighted : bool, param isVertexT64 : bool, param isEdgeT64 : bool, in handle : CSR_handle, in channel) {
+      if (handle.desc.isWeightT64) {
+        writeCSRHandle(isWeighted, isVertexT64, isEdgeT64, true, handle, channel);
+      } else {
+        writeCSRHandle(isWeighted, isVertexT64, isEdgeT64, false, handle, channel);
+      }
+    }
+    private proc writeCSRHandle(param isWeighted : bool, param isVertexT64 : bool, in handle : CSR_handle, in channel) {
+      if (handle.desc.isEdgeT64) {
+        writeCSRHandle(isWeighted, isVertexT64, true, handle, channel);
+      } else {
+        writeCSRHandle(isWeighted, isVertexT64, false, handle, channel);
+      }
+    }
+    private proc writeCSRHandle(param isWeighted : bool, in handle : CSR_handle, in channel) {
+      if (handle.desc.isVertexT64) {
+        writeCSRHandle(isWeighted, true, handle, channel);
+      } else {
+        writeCSRHandle(isWeighted, false, handle, channel);
+      }
+    }
+    private proc writeCSRHandle(in handle : CSR_handle, in channel) {
+      if (handle.desc.isWeighted) {
+        writeCSRHandle(true, handle, channel);
+      } else {
+        writeCSRHandle(false, handle, channel);
+      }
+    }
   //Opaque handle
   record CSR_handle {
     var desc : CSR_descriptor;
@@ -255,40 +290,6 @@ proc ReadCSRArrays(in handle : CSR_handle, in channel, in isZeroIndexed: bool, i
     ReadCSRArrays(true, handle, channel, isZeroIndexed, isDirected, hasReverseEdges);
   } else {
     ReadCSRArrays(false, handle, channel, isZeroIndexed, isDirected, hasReverseEdges);
-  }
-} 
-proc writeCSRHandle(param isWeighted : bool, param isVertexT64 : bool, param isEdgeT64 : bool, param isWeightT64 : bool, in handle : CSR_handle, in channel) {
-  //Bring the handle into concrete type
-  var myCSR = ReinterpretCSRHandle(unmanaged CSR(isWeighted, isVertexT64, isEdgeT64, isWeightT64), handle);
-  //Then write the concrete instance
-  channel.write(myCSR);
-}
-proc writeCSRHandle(param isWeighted : bool, param isVertexT64 : bool, param isEdgeT64 : bool, in handle : CSR_handle, in channel) {
-  if (handle.desc.isWeightT64) {
-    writeCSRHandle(isWeighted, isVertexT64, isEdgeT64, true, handle, channel);
-  } else {
-    writeCSRHandle(isWeighted, isVertexT64, isEdgeT64, false, handle, channel);
-  }
-} 
-proc writeCSRHandle(param isWeighted : bool, param isVertexT64 : bool, in handle : CSR_handle, in channel) {
-  if (handle.desc.isEdgeT64) {
-    writeCSRHandle(isWeighted, isVertexT64, true, handle, channel);
-  } else {
-    writeCSRHandle(isWeighted, isVertexT64, false, handle, channel);
-  }
-}
-proc writeCSRHandle(param isWeighted : bool, in handle : CSR_handle, in channel) {
-  if (handle.desc.isVertexT64) {
-    writeCSRHandle(isWeighted, true, handle, channel);
-  } else {
-    writeCSRHandle(isWeighted, false, handle, channel);
-  }
-}
-proc writeCSRHandle(in handle : CSR_handle, in channel) {
-  if (handle.desc.isWeighted) {
-    writeCSRHandle(true, handle, channel);
-  } else {
-    writeCSRHandle(false, handle, channel);
   }
 } 
 
