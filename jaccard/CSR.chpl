@@ -24,6 +24,37 @@ prototype module CSR {
     var numEdges : int(64) = 0;
     //Because of how Chapel casts to enums we can't store "all false (0)" or ORed values in an enum, so the flags field has to be treated as int(64)
     var flags : int(64) = 0;
+    proc init() { }
+    proc init=(rhs : CSR_descriptor) {
+      this.numVerts = rhs.numVerts;
+      this.numEdges = rhs.numEdges;
+      //flags
+      this.flags = 0; //Have to start with a non-compound initialization
+      if (rhs.isWeighted) { this.flags |= (CSR_header_flags.isWeighted : int(64)); }
+      if (rhs.isZeroIndexed) { this.flags |= (CSR_header_flags.isZeroIndexed : int(64)); }
+      if (rhs.isDirected) { this.flags |= (CSR_header_flags.isDirected : int(64)); }
+      if (rhs.hasReverseEdges) { this.flags |= (CSR_header_flags.hasReverseEdges : int(64)); }
+      if (rhs.isVertexT64) { this.flags |= (CSR_header_flags.isVertexT64 : int(64)); }
+      if (rhs.isEdgeT64) { this.flags |= (CSR_header_flags.isEdgeT64 : int(64)); }
+      if (rhs.isWeightT64) { this.flags |= (CSR_header_flags.isWeightT64 : int(64)); }
+    }
+    operator =(ref lhs: CSR_file_header, rhs : CSR_descriptor) {
+      lhs.numVerts = rhs.numVerts;
+      lhs.numEdges = rhs.numEdges;
+      //flags
+      lhs.flags = 0; //Have to start with a non-compound initialization
+      if (rhs.isWeighted) { lhs.flags |= (CSR_header_flags.isWeighted : int(64)); }
+      if (rhs.isZeroIndexed) { lhs.flags |= (CSR_header_flags.isZeroIndexed : int(64)); }
+      if (rhs.isDirected) { lhs.flags |= (CSR_header_flags.isDirected : int(64)); }
+      if (rhs.hasReverseEdges) { lhs.flags |= (CSR_header_flags.hasReverseEdges : int(64)); }
+      if (rhs.isVertexT64) { lhs.flags |= (CSR_header_flags.isVertexT64 : int(64)); }
+      if (rhs.isEdgeT64) { lhs.flags |= (CSR_header_flags.isEdgeT64 : int(64)); }
+      if (rhs.isWeightT64) { lhs.flags |= (CSR_header_flags.isWeightT64 : int(64)); }
+    }
+    operator :(from : CSR_descriptor, type to : this.type) {
+      var tmp : to = from;
+      return tmp;
+    }
   }
 
   //Runtime type descriptor
@@ -39,7 +70,29 @@ prototype module CSR {
     var numVerts : int(64) = 0;
     //need a general init function now, but it doesn't have to do anything since all fields have defaults
     proc init() { }
-    proc init(rhs : CSR_file_header) {
+    proc init=(rhs : CSR_descriptor) {
+      this.isWeighted = rhs.isWeighted;
+      this.isZeroIndexed = rhs.isZeroIndexed;
+      this.isDirected = rhs.isDirected;
+      this.hasReverseEdges = rhs.hasReverseEdges;
+      this.isVertexT64 = rhs.isVertexT64;
+      this.isEdgeT64 = rhs.isEdgeT64;
+      this.isWeightT64 = rhs.isWeightT64;
+      this.numEdges = rhs.numEdges;
+      this.numVerts = rhs.numVerts;
+    }
+    operator =(ref lhs: CSR_descriptor, rhs : CSR_descriptor) {
+      lhs.isWeighted = rhs.isWeighted;
+      lhs.isZeroIndexed = rhs.isZeroIndexed;
+      lhs.isDirected = rhs.isDirected;
+      lhs.hasReverseEdges = rhs.hasReverseEdges;
+      lhs.isVertexT64 = rhs.isVertexT64;
+      lhs.isEdgeT64 = rhs.isEdgeT64;
+      lhs.isWeightT64 = rhs.isWeightT64;
+      lhs.numEdges = rhs.numEdges;
+      lhs.numVerts = rhs.numVerts;
+    }
+    proc init=(rhs : CSR_file_header) {
       assert(rhs.binaryFormatVersion == CSR_BINARY_FORMAT_VERSION, "Assigning incompatible binary version ", rhs.binaryFormatVersion, " but expected ", CSR_BINARY_FORMAT_VERSION);
       if ((rhs.flags & (CSR_header_flags.isWeighted : int(64))) != 0) { this.isWeighted = true; }
       if ((rhs.flags & (CSR_header_flags.isZeroIndexed : int(64))) != 0) { this.isZeroIndexed = true; }
@@ -62,6 +115,10 @@ prototype module CSR {
       if ((rhs.flags & (CSR_header_flags.isWeightT64 : int(64))) != 0) { lhs.isWeightT64 = true; }
       lhs.numEdges = rhs.numEdges;
       lhs.numVerts = rhs.numVerts;
+    }
+    operator :(from : CSR_file_header, type to : this.type) {
+      var tmp : to = from;
+      return tmp;
     }
   }
     //FIXME: These really belong to the CSR_handle record, but private cannot be applied to members yet
@@ -126,25 +183,14 @@ prototype module CSR {
     }
     proc readThis(f) throws {
       //Read the fixed-size header
-      //  var header = {0, 0, 0, 0} : CSR_file_header; // "illegal cast from DefaultAssociativeDom(int(64),true) to CSR_file_header" // so I guess don't initialize here?
       var header : CSR_file_header;
-      var expectedBinFmt = header.binaryFormatVersion; //FIXME I can't figure out a better way to grab the default integral constant from the record type, other than just copying it from an entity that has been default initialized
       f.read(header);
-      var actualBinFmt : int(64);
-      var numVerts : int(64);
-      var numEdges : int(64);
-      var isWeighted : bool;
-      var isZeroIndexed : bool;
-      var isDirected : bool;
-      var hasReverseEdges : bool;
-      var isVertexT64 : bool;
-      var isEdgeT64 : bool;
-      var isWeightT64 : bool;
-      //FIXME This is a CSR_descriptor, so we've got it, and the one in the eventual handle, we should really only have one
-      var myCSR = parseCSRHeader(header, actualBinFmt, numVerts, numEdges, isWeighted, isZeroIndexed, isDirected, hasReverseEdges, isVertexT64, isEdgeT64, isWeightT64);
-      //Assert that the binary format version is the one we're expecting (Vers. 2)
-      assert(actualBinFmt == expectedBinFmt, "Binary version of inFile is ", header.binaryFormatVersion, " but expected ", expectedBinFmt);
-      this = MakeCSR(myCSR.isWeighted, myCSR.isVertexT64, myCSR.isEdgeT64, myCSR.isWeightT64, numEdges, numVerts);
+      //FIXME The handle's descriptor should be used to define/initialize the internal CSR 
+      this.desc = header;
+      var isZeroIndexed = this.desc.isZeroIndexed;
+      var isDirected = this.desc.isDirected;
+      var hasReverseEdges = this.desc.hasReverseEdges;
+      this = MakeCSR(this.desc.isWeighted, this.desc.isVertexT64, this.desc.isEdgeT64, this.desc.isWeightT64, this.desc.numEdges, this.desc.numVerts);
       ReadCSRArrays(this, f, isZeroIndexed, isDirected, hasReverseEdges);
     }
   }
@@ -170,22 +216,24 @@ prototype module CSR {
 
     //TODO implement readThis, which is harder because we don't know the concrete type until we've read the header.
     //One approach would be to implement readThis to also read the header, and then if type widths of the header don't match, then coerce them into whatever width the instance is configured for. For our application, if we wanted to use the actual type, we'd have to read the header, create the instance, and then rewind the seek cursor to before the header. Which is fine. But this would then support implicit read-time conversion which could be handy for promoting/demoting widths.
-
+    proc getDescriptor() : CSR_descriptor {
+      var ret : CSR_descriptor;
+      ret.isWeighted = this.isWeighted;
+      ret.isZeroIndexed = this.isZeroIndexed;
+      ret.isDirected = this.isDirected;
+      ret.hasReverseEdges = this.hasReverseEdges;
+      ret.isVertexT64 = this.isVertexT64;
+      ret.isEdgeT64 = this.isEdgeT64;
+      ret.isWeightT64 = this.isWeightT64;
+      ret.numEdges = this.numEdges;
+      ret.numVerts = this.numVerts;
+      return ret;
+    }
     //writeThis is easier to implement because we already know the concrete type
     override proc writeThis(f) throws {
       if (f.binary()) { //We assume binary IO is for file writing and non-binary is for string
-        //Construct a header and write it
-        var header : CSR_file_header;
-        header.numVerts = numVerts;
-        header.numEdges = numEdges;
-        //flags
-        if (isWeighted) { header.flags |= (CSR_header_flags.isWeighted : int(64)); }
-        if (isZeroIndexed) { header.flags |= (CSR_header_flags.isZeroIndexed : int(64)); }
-        if (isDirected) { header.flags |= (CSR_header_flags.isDirected : int(64)); }
-        if (hasReverseEdges) { header.flags |= (CSR_header_flags.hasReverseEdges : int(64)); }
-        if (isVertexT64) { header.flags |= (CSR_header_flags.isVertexT64 : int(64)); }
-        if (isEdgeT64) { header.flags |= (CSR_header_flags.isEdgeT64 : int(64)); }
-        if (isWeightT64) { header.flags |= (CSR_header_flags.isWeightT64 : int(64)); }
+        //Construct a header from my descriptor and write it
+        var header = this.getDescriptor() : CSR_file_header;
         f.write(header);
         
         //Print offsets, then indices, then weights
@@ -326,23 +374,6 @@ proc ReadCSRArrays(in handle : CSR_handle, in channel, in isZeroIndexed: bool, i
     ReadCSRArrays(false, handle, channel, isZeroIndexed, isDirected, hasReverseEdges);
   }
 } 
-
-//The new parser returns the elaborated CSR type, so that the application can use it directly to construct
-proc parseCSRHeader(in header : CSR_file_header,out binFmtVers : int(64), out numVerts : int(64), out numEdges : int(64),
-    out isWeighted : bool, out isZeroIndexed : bool, out isDirected : bool, out hasReverseEdges : bool,
-    out isVertexT64 : bool, out isEdgeT64: bool, ref isWeightT64: bool) : CSR_descriptor {
-  binFmtVers = header.binaryFormatVersion;
-  numVerts = header.numVerts;
-  numEdges = header.numEdges; 
-  if ((header.flags & (CSR_header_flags.isWeighted : int(64))) != 0) { isWeighted = true; }
-  if ((header.flags & (CSR_header_flags.isZeroIndexed : int(64))) != 0) { isZeroIndexed = true; }
-  if ((header.flags & (CSR_header_flags.isDirected : int(64))) != 0) { isDirected = true; }
-  if ((header.flags & (CSR_header_flags.hasReverseEdges : int(64))) != 0) { hasReverseEdges = true; }
-  if ((header.flags & (CSR_header_flags.isVertexT64 : int(64))) != 0) { isVertexT64 = true; }
-  if ((header.flags & (CSR_header_flags.isEdgeT64 : int(64))) != 0) { isEdgeT64 = true; }
-  if ((header.flags & (CSR_header_flags.isWeightT64 : int(64))) != 0) { isWeightT64 = true; }
-  return new CSR_descriptor(header);
-}
 
 //FIXME, remove these three bools one the writer is encapsulated in CSR.writeThis
 proc readCSRFile(in inFile : string, out isZeroIndexed : bool, out isDirected : bool, out hasReverseEdges : bool) : CSR_handle {
