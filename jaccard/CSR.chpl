@@ -118,6 +118,29 @@ prototype module CSR {
         f.write(")");
       }
     }
+    proc readThis(f) throws {
+      //Read the fixed-size header
+      //  var header = {0, 0, 0, 0} : CSR_file_header; // "illegal cast from DefaultAssociativeDom(int(64),true) to CSR_file_header" // so I guess don't initialize here?
+      var header : CSR_file_header;
+      var expectedBinFmt = header.binaryFormatVersion; //FIXME I can't figure out a better way to grab the default integral constant from the record type, other than just copying it from an entity that has been default initialized
+      f.read(header);
+      var actualBinFmt : int(64);
+      var numVerts : int(64);
+      var numEdges : int(64);
+      var isWeighted : bool;
+      var isZeroIndexed : bool;
+      var isDirected : bool;
+      var hasReverseEdges : bool;
+      var isVertexT64 : bool;
+      var isEdgeT64 : bool;
+      var isWeightT64 : bool;
+      //FIXME This is a CSR_descriptor, so we've got it, and the one in the eventual handle, we should really only have one
+      var myCSR = parseCSRHeader(header, actualBinFmt, numVerts, numEdges, isWeighted, isZeroIndexed, isDirected, hasReverseEdges, isVertexT64, isEdgeT64, isWeightT64);
+      //Assert that the binary format version is the one we're expecting (Vers. 2)
+      assert(actualBinFmt == expectedBinFmt, "Binary version of inFile is ", header.binaryFormatVersion, " but expected ", expectedBinFmt);
+      this = MakeCSR(myCSR.isWeighted, myCSR.isVertexT64, myCSR.isEdgeT64, myCSR.isWeightT64, numEdges, numVerts);
+      ReadCSRArrays(this, f, isZeroIndexed, isDirected, hasReverseEdges);
+    }
   }
 
   //Can we make this a generic type to accept both 32- and 64-bit vertices/edges/weights?
@@ -325,31 +348,11 @@ proc readCSRFile(in inFile : string, out isZeroIndexed : bool, out isDirected : 
     var readFile = IO.open(inFile, IO.iomode.r);
     //Create a read channel
     var readChannel = readFile.reader(kind = IO.iokind.native, locking = false, hints = IO.ioHintSet.sequential);
-    //Read the fixed-size header
-
-    //  var header = {0, 0, 0, 0} : CSR_file_header; // "illegal cast from DefaultAssociativeDom(int(64),true) to CSR_file_header" // so I guess don't initialize here?
-    var header : CSR_file_header;
-    var expectedBinFmt = header.binaryFormatVersion; //FIXME I can't figure out a better way to grab the default integral constant from the record type, other than just copying it from an entity that has been default initialized
-    readChannel.read(header);
-    //readChannel.read(header.binaryFormatVersion);
-    var actualBinFmt : int(64);
-    var numVerts : int(64);
-    var numEdges : int(64);
-    var isWeighted : bool;
-//    var isZeroIndexed : bool;
-//    var isDirected : bool;
-//    var hasReverseEdges : bool;
-    var isVertexT64 : bool;
-    var isEdgeT64 : bool;
-    var isWeightT64 : bool;
-    //FIXME This is a CSR_descriptor, so we've got it, and the one in the eventual handle, we should really only have one
-    var myCSR = parseCSRHeader(header, actualBinFmt, numVerts, numEdges, isWeighted, isZeroIndexed, isDirected, hasReverseEdges, isVertexT64, isEdgeT64, isWeightT64);
-    //Assert that the binary format version is the one we're expecting (Vers. 2)
-    assert(actualBinFmt == expectedBinFmt, "Binary version of ", inFile, " is ", header.binaryFormatVersion, " but expected ", expectedBinFmt);
-    var myHandle = MakeCSR(myCSR.isWeighted, myCSR.isVertexT64, myCSR.isEdgeT64, myCSR.isWeightT64, numEdges, numVerts);
-    ReadCSRArrays(myHandle, readChannel, isZeroIndexed, isDirected, hasReverseEdges);
+    //Create an empty handle
+    var retHandle : CSR_handle;
+    readChannel.read(retHandle);
     //TODO anything to gracefully close the channel/file?
-    return myHandle;
+    return retHandle;
 }
 
 proc writeCSRFile(in outFile : string, in handle : CSR_handle) {
