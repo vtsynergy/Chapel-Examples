@@ -17,8 +17,9 @@ prototype module CSR {
     isWeightT64 = 1 << 6,
   };
 
+  private param CSR_BINARY_FORMAT_VERSION : int(64) = 1;
   record CSR_file_header {
-    var binaryFormatVersion : int(64) = 1;
+    var binaryFormatVersion : int(64) = CSR_BINARY_FORMAT_VERSION;
     var numVerts : int(64) = 0;
     var numEdges : int(64) = 0;
     //Because of how Chapel casts to enums we can't store "all false (0)" or ORed values in an enum, so the flags field has to be treated as int(64)
@@ -27,33 +28,38 @@ prototype module CSR {
 
   //Runtime type descriptor
   record CSR_descriptor {
-    var isWeighted : bool;
-    var isVertexT64 : bool;
-    var isEdgeT64 : bool;
-    var isWeightT64 : bool;
-    var numEdges : int(64);
-    var numVerts : int(64);
-   proc init=(rhs : (4*bool, 2*int)) {
-      this.isWeighted = rhs(0);
-      this.isVertexT64 = rhs(1);
-      this.isEdgeT64 = rhs(2);
-      this.isWeightT64 = rhs(3);
-      this.numEdges = rhs(4);
-      this.numVerts = rhs(5);
-    }
-   proc init=(rhs : CSR_descriptor) {
-      this.isWeighted = rhs.isWeighted;
-      this.isVertexT64 = rhs.isVertexT64;
-      this.isEdgeT64 = rhs.isEdgeT64;
-      this.isWeightT64 = rhs.isWeightT64;
+    var isWeighted : bool = false;
+    var isZeroIndexed : bool = false;
+    var isDirected : bool = false;
+    var hasReverseEdges : bool = false;
+    var isVertexT64 : bool = false;
+    var isEdgeT64 : bool = false;
+    var isWeightT64 : bool = false;
+    var numEdges : int(64) = 0;
+    var numVerts : int(64) = 0;
+    //need a general init function now, but it doesn't have to do anything since all fields have defaults
+    proc init() { }
+    proc init(rhs : CSR_file_header) {
+      assert(rhs.binaryFormatVersion == CSR_BINARY_FORMAT_VERSION, "Assigning incompatible binary version ", rhs.binaryFormatVersion, " but expected ", CSR_BINARY_FORMAT_VERSION);
+      if ((rhs.flags & (CSR_header_flags.isWeighted : int(64))) != 0) { this.isWeighted = true; }
+      if ((rhs.flags & (CSR_header_flags.isZeroIndexed : int(64))) != 0) { this.isZeroIndexed = true; }
+      if ((rhs.flags & (CSR_header_flags.isDirected : int(64))) != 0) { this.isDirected = true; }
+      if ((rhs.flags & (CSR_header_flags.hasReverseEdges : int(64))) != 0) { this.hasReverseEdges = true; }
+      if ((rhs.flags & (CSR_header_flags.isVertexT64 : int(64))) != 0) { this.isVertexT64 = true; }
+      if ((rhs.flags & (CSR_header_flags.isEdgeT64 : int(64))) != 0) { this.isEdgeT64 = true; }
+      if ((rhs.flags & (CSR_header_flags.isWeightT64 : int(64))) != 0) { this.isWeightT64 = true; }
       this.numEdges = rhs.numEdges;
       this.numVerts = rhs.numVerts;
     }
-    operator =(ref lhs : CSR_descriptor, rhs : CSR_descriptor) {
-      lhs.isWeighted = rhs.isWeighted;
-      lhs.isVertexT64 = rhs.isVertexT64;
-      lhs.isEdgeT64 = rhs.isEdgeT64;
-      lhs.isWeightT64 = rhs.isWeightT64;
+    operator =(ref lhs: CSR_descriptor, rhs : CSR_file_header) {
+      assert(rhs.binaryFormatVersion == CSR_BINARY_FORMAT_VERSION, "Assigning incompatible binary version ", rhs.binaryFormatVersion, " but expected ", CSR_BINARY_FORMAT_VERSION);
+      if ((rhs.flags & (CSR_header_flags.isWeighted : int(64))) != 0) { lhs.isWeighted = true; }
+      if ((rhs.flags & (CSR_header_flags.isZeroIndexed : int(64))) != 0) { lhs.isZeroIndexed = true; }
+      if ((rhs.flags & (CSR_header_flags.isDirected : int(64))) != 0) { lhs.isDirected = true; }
+      if ((rhs.flags & (CSR_header_flags.hasReverseEdges : int(64))) != 0) { lhs.hasReverseEdges = true; }
+      if ((rhs.flags & (CSR_header_flags.isVertexT64 : int(64))) != 0) { lhs.isVertexT64 = true; }
+      if ((rhs.flags & (CSR_header_flags.isEdgeT64 : int(64))) != 0) { lhs.isEdgeT64 = true; }
+      if ((rhs.flags & (CSR_header_flags.isWeightT64 : int(64))) != 0) { lhs.isWeightT64 = true; }
       lhs.numEdges = rhs.numEdges;
       lhs.numVerts = rhs.numVerts;
     }
@@ -214,7 +220,12 @@ proc NewCSRHandle(type CSR_type : CSR(?), in numEdges : int(64), in numVerts : i
     retCSR.numEdges = numEdges;
     retCSR.numVerts = numVerts;
     var retCast = (retCSR : c_void_ptr); //In 2.0 this *may* become analagous to c_ptrTo(<someclass>) but it isn't yet
-    retHandle.desc = new CSR_descriptor(CSR_type.isWeighted, CSR_type.isVertexT64, CSR_type.isEdgeT64, CSR_type.isWeightT64, numEdges, numVerts);
+    retHandle.desc.isWeighted = CSR_type.isWeighted;
+    retHandle.desc.isVertexT64 = CSR_type.isVertexT64;
+    retHandle.desc.isEdgeT64 = CSR_type.isEdgeT64;
+    retHandle.desc.isWeightT64 = CSR_type.isWeightT64;
+    retHandle.desc.numEdges = retCSR.numEdges;
+    retHandle.desc.numVerts = retCSR.numVerts;
     retHandle.data = retCast;
   }
 
@@ -330,13 +341,8 @@ proc parseCSRHeader(in header : CSR_file_header,out binFmtVers : int(64), out nu
   if ((header.flags & (CSR_header_flags.isVertexT64 : int(64))) != 0) { isVertexT64 = true; }
   if ((header.flags & (CSR_header_flags.isEdgeT64 : int(64))) != 0) { isEdgeT64 = true; }
   if ((header.flags & (CSR_header_flags.isWeightT64 : int(64))) != 0) { isWeightT64 = true; }
-  return new CSR_descriptor(isWeighted, isVertexT64, isEdgeT64, isWeightT64, numVerts, numEdges);
+  return new CSR_descriptor(header);
 }
-
-class food {
-  var bar : int(64);
-};
-
 
 //FIXME, remove these three bools one the writer is encapsulated in CSR.writeThis
 proc readCSRFile(in inFile : string, out isZeroIndexed : bool, out isDirected : bool, out hasReverseEdges : bool) : CSR_handle {
