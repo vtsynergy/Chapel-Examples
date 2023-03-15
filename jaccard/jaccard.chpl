@@ -21,13 +21,10 @@ module Jaccard {
     assert(outFile != "", "Must provide output file with '--outFile=<pathToFile>'");
 
     //Read the input file and set up host arrays (use generic methods to support different FP types)
-    var isZeroIndexed : bool;
-    var isDirected : bool;
-    var hasReverseEdges : bool;
-    var inCSR = readCSRFile(inFile, isZeroIndexed, isDirected, hasReverseEdges);
+    var inCSR = readCSRFile(inFile);
     //Create an empty output CSR of the same type as the input, the kernel pipelines will populate it
     var outDesc = inCSR.desc;
-    outDesc.isWeighted = true;
+    outDesc.isWeighted = true; //Always need weights on outputs, that's where we store JS values
     var outCSR = MakeCSR(outDesc);
     //Launch the selected kernel pipeline
     if (useCUGraph) {

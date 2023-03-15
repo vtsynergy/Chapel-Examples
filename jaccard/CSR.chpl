@@ -182,13 +182,20 @@ prototype module CSR {
       }
     }
     proc readThis(f) throws {
-      //Read the fixed-size header
-      var header : CSR_file_header;
-      f.read(header);
-      //Convert the header to a descriptor using record operator overload
-      this.desc = header;
-      this = MakeCSR(this.desc);
-      ReadCSRArrays(this, f, this.desc.isZeroIndexed, this.desc.isDirected, this.desc.hasReverseEdges);
+      if (f.binary()) {
+        //Read the fixed-size header
+        var header : CSR_file_header;
+        f.read(header);
+        //Convert the header to a descriptor using record operator overload
+        this.desc = header;
+        this = MakeCSR(this.desc);
+        //Rewind the file cursor to zero offset, with unbounded range
+        f.seek(0..);
+        //Invoke the param-spec ladder to read the actual CSR member
+        ReadCSRArrays(this, f);
+      } else {
+        assert(false, "CSR_handle text read not supported!");
+      }
     }
   }
 
@@ -211,8 +218,6 @@ prototype module CSR {
     var weightDom : domain(1) = {0..(if isWeighted then numEdges-1 else 0)}; //Degenerate if we don't have weights
     var weights : [weightDom] real(if isWeightT64 then 64 else 32);
 
-    //TODO implement readThis, which is harder because we don't know the concrete type until we've read the header.
-    //One approach would be to implement readThis to also read the header, and then if type widths of the header don't match, then coerce them into whatever width the instance is configured for. For our application, if we wanted to use the actual type, we'd have to read the header, create the instance, and then rewind the seek cursor to before the header. Which is fine. But this would then support implicit read-time conversion which could be handy for promoting/demoting widths.
     proc getDescriptor() : CSR_descriptor {
       var ret : CSR_descriptor;
       ret.isWeighted = this.isWeighted;
@@ -255,6 +260,34 @@ prototype module CSR {
         f.write(ret); 
       }
     }
+    override proc readThis(f) {
+      if (f.binary()) {
+        //Assume we are at zero offset to re-read the header
+        //Read the header and convert it to descriptor
+        var header : CSR_file_header;
+        f.read(header);
+        //Convert the header to a descriptor using record operator overload
+        var desc : CSR_descriptor = header;
+        //Assert that all the fields match
+	assert((this.isWeighted == desc.isWeighted &&
+                this.isZeroIndexed == desc.isZeroIndexed &&
+                this.isDirected == desc.isDirected &&
+                this.hasReverseEdges == desc.hasReverseEdges &&
+                this.isVertexT64 == desc.isVertexT64 &&
+                this.isEdgeT64 == desc.isEdgeT64 &&
+                this.isWeightT64 == desc.isWeightT64 &&
+                this.numEdges == desc.numEdges &&
+                this.numVerts == this.numVerts),
+                "Error reading ", this.type : string, " from incompatible binary representation ", desc : string);
+        //Read arrays in order
+        f.read(this.offsets);
+        f.read(this.indices);
+        if (isWeighted) { f.read(this.weights); }
+      } else {
+        assert(false, "CSR text read not supported!");
+      }
+
+    }
   }
 
 
@@ -268,6 +301,10 @@ proc NewCSRHandle(type CSR_type : CSR(?), in desc : CSR_descriptor): CSR_handle 
   local { // Right now the GPU implementation uses "wide" pointers everywhere, "local" forces a version that doesn't trip up on node-locality assertions for now
     //FIXME add an "initialize from descriptor" procedure
     var retCSR = new unmanaged CSR_type(desc.numEdges, desc.numVerts);
+    //Assign all the non-param, non-array fields
+    retCSR.isZeroIndexed = desc.isZeroIndexed;
+    retCSR.isDirected = desc.isDirected;
+    retCSR.hasReverseEdges = desc.hasReverseEdges;
     retCSR.numEdges = desc.numEdges;
     retCSR.numVerts = desc.numVerts;
     var retCast = (retCSR : c_void_ptr); //In 2.0 this *may* become analagous to c_ptrTo(<someclass>) but it isn't yet
@@ -330,54 +367,45 @@ proc ReinterpretCSRHandle(type CSR_type: unmanaged CSR(?), in handle : CSR_handl
   return retCSR;
 }
 
-proc ReadCSRArrays(param isWeighted : bool, param isVertexT64 : bool, param isEdgeT64 : bool, param isWeightT64 : bool, in handle : CSR_handle, in channel, in isZeroIndexed: bool, in isDirected : bool, in hasReverseEdges : bool) {
+private proc ReadCSRArrays(in handle : CSR_handle, in channel, param isWeighted : bool, param isVertexT64 : bool, param isEdgeT64 : bool, param isWeightT64 : bool) {
   //Bring the handle into concrete type
   var myCSR = ReinterpretCSRHandle(unmanaged CSR(isWeighted, isVertexT64, isEdgeT64, isWeightT64), handle);
-  //FIXME: These should be read in differently
-  myCSR.isZeroIndexed = isZeroIndexed;
-  myCSR.isDirected = isDirected;
-  myCSR.hasReverseEdges = hasReverseEdges;
   //Read arrays 
-  channel.read(myCSR.offsets);
-  channel.read(myCSR.indices);
-  if (isWeighted) { channel.read(myCSR.weights); }
-  writeln("After array read: ", myCSR);
+  channel.read(myCSR);
 }
-proc ReadCSRArrays(param isWeighted : bool, param isVertexT64 : bool, param isEdgeT64 : bool, in handle : CSR_handle, in channel, in isZeroIndexed: bool, in isDirected : bool, in hasReverseEdges : bool) {
+private proc ReadCSRArrays(in handle : CSR_handle, in channel, param isWeighted : bool, param isVertexT64 : bool, param isEdgeT64 : bool) {
   if (handle.desc.isWeightT64) {
-    ReadCSRArrays(isWeighted, isVertexT64, isEdgeT64, true, handle, channel, isZeroIndexed, isDirected, hasReverseEdges);
+    ReadCSRArrays(handle, channel, isWeighted, isVertexT64, isEdgeT64, true);
   } else {
-    ReadCSRArrays(isWeighted, isVertexT64, isEdgeT64, false, handle, channel, isZeroIndexed, isDirected, hasReverseEdges);
+    ReadCSRArrays(handle, channel, isWeighted, isVertexT64, isEdgeT64, false);
   }
 } 
-proc ReadCSRArrays(param isWeighted : bool, param isVertexT64 : bool, in handle : CSR_handle, in channel, in isZeroIndexed: bool, in isDirected : bool, in hasReverseEdges : bool) {
+private proc ReadCSRArrays(in handle : CSR_handle, in channel, param isWeighted : bool, param isVertexT64 : bool) {
   if (handle.desc.isEdgeT64) {
-    ReadCSRArrays(isWeighted, isVertexT64, true, handle, channel, isZeroIndexed, isDirected, hasReverseEdges);
+    ReadCSRArrays(handle, channel, isWeighted, isVertexT64, true);
   } else {
-    ReadCSRArrays(isWeighted, isVertexT64, false, handle, channel, isZeroIndexed, isDirected, hasReverseEdges);
+    ReadCSRArrays(handle, channel, isWeighted, isVertexT64, false);
   }
 }
-proc ReadCSRArrays(param isWeighted : bool, in handle : CSR_handle, in channel, in isZeroIndexed: bool, in isDirected : bool, in hasReverseEdges : bool) {
+private proc ReadCSRArrays(in handle : CSR_handle, in channel, param isWeighted : bool) {
   if (handle.desc.isVertexT64) {
-    ReadCSRArrays(isWeighted, true, handle, channel, isZeroIndexed, isDirected, hasReverseEdges);
+    ReadCSRArrays(handle, channel, isWeighted, true);
   } else {
-    ReadCSRArrays(isWeighted, false, handle, channel, isZeroIndexed, isDirected, hasReverseEdges);
+    ReadCSRArrays(handle, channel, isWeighted, false);
   }
 }
-proc ReadCSRArrays(in handle : CSR_handle, in channel, in isZeroIndexed: bool, in isDirected : bool, in hasReverseEdges : bool) {
+proc ReadCSRArrays(in handle : CSR_handle, in channel) {
   if (handle.desc.isWeighted) {
-    ReadCSRArrays(true, handle, channel, isZeroIndexed, isDirected, hasReverseEdges);
+    ReadCSRArrays(handle, channel, true);
   } else {
-    ReadCSRArrays(false, handle, channel, isZeroIndexed, isDirected, hasReverseEdges);
+    ReadCSRArrays(handle, channel, false);
   }
 } 
 
-//FIXME, remove these three bools one the writer is encapsulated in CSR.writeThis
-proc readCSRFile(in inFile : string, out isZeroIndexed : bool, out isDirected : bool, out hasReverseEdges : bool) : CSR_handle {
+proc readCSRFile(in inFile : string) : CSR_handle {
 
     ///File operations (which they are reworking as of 1.29.0)
     //FIXME: Add error handling
-    //FIXME: Reimplement using readThis methods
     //Open
     var readFile = IO.open(inFile, IO.iomode.r);
     //Create a read channel
