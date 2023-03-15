@@ -185,13 +185,10 @@ prototype module CSR {
       //Read the fixed-size header
       var header : CSR_file_header;
       f.read(header);
-      //FIXME The handle's descriptor should be used to define/initialize the internal CSR 
+      //Convert the header to a descriptor using record operator overload
       this.desc = header;
-      var isZeroIndexed = this.desc.isZeroIndexed;
-      var isDirected = this.desc.isDirected;
-      var hasReverseEdges = this.desc.hasReverseEdges;
-      this = MakeCSR(this.desc.isWeighted, this.desc.isVertexT64, this.desc.isEdgeT64, this.desc.isWeightT64, this.desc.numEdges, this.desc.numVerts);
-      ReadCSRArrays(this, f, isZeroIndexed, isDirected, hasReverseEdges);
+      this = MakeCSR(this.desc);
+      ReadCSRArrays(this, f, this.desc.isZeroIndexed, this.desc.isDirected, this.desc.hasReverseEdges);
     }
   }
 
@@ -261,22 +258,22 @@ prototype module CSR {
   }
 
 
-proc NewCSRHandle(type CSR_type : CSR(?), in numEdges : int(64), in numVerts : int(64)): CSR_handle {
+proc NewCSRHandle(type CSR_type : CSR(?), in desc : CSR_descriptor): CSR_handle {
+  assert(( CSR_type.isWeighted == desc.isWeighted &&
+           CSR_type.isVertexT64 == desc.isVertexT64 &&
+           CSR_type.isEdgeT64 == desc.isEdgeT64 &&
+           CSR_type.isWeightT64 == desc.isWeightT64),
+           "Cannot create new CSR handle, type mismatched with descriptor!\nType: ", CSR_type : string, "\nDescriptor: ", desc : string);
   var retHandle : CSR_handle;
   local { // Right now the GPU implementation uses "wide" pointers everywhere, "local" forces a version that doesn't trip up on node-locality assertions for now
-    var retCSR = new unmanaged CSR_type(numEdges, numVerts);
-    retCSR.numEdges = numEdges;
-    retCSR.numVerts = numVerts;
+    //FIXME add an "initialize from descriptor" procedure
+    var retCSR = new unmanaged CSR_type(desc.numEdges, desc.numVerts);
+    retCSR.numEdges = desc.numEdges;
+    retCSR.numVerts = desc.numVerts;
     var retCast = (retCSR : c_void_ptr); //In 2.0 this *may* become analagous to c_ptrTo(<someclass>) but it isn't yet
-    retHandle.desc.isWeighted = CSR_type.isWeighted;
-    retHandle.desc.isVertexT64 = CSR_type.isVertexT64;
-    retHandle.desc.isEdgeT64 = CSR_type.isEdgeT64;
-    retHandle.desc.isWeightT64 = CSR_type.isWeightT64;
-    retHandle.desc.numEdges = retCSR.numEdges;
-    retHandle.desc.numVerts = retCSR.numVerts;
     retHandle.data = retCast;
+    retHandle.desc = desc;
   }
-
   return retHandle;
 }
 
@@ -284,35 +281,35 @@ proc NewCSRHandle(type CSR_type : CSR(?), in numEdges : int(64), in numVerts : i
 // to the right compile-time instantiation of the CSR type
 //We then pass the opaque handle up to be passed around by the functions that
 // don't really need to know the internals of the type
-proc MakeCSR(param isWeighted : bool, param isVertexT64 : bool, param isEdgeT64 : bool, param isWeightT64 : bool, in numEdges : int(64), in numVerts : int(64)) :CSR_handle {
-  return NewCSRHandle(CSR(isWeighted, isVertexT64, isEdgeT64, isWeightT64), numEdges, numVerts);
+private proc MakeCSR(in desc : CSR_descriptor, param isWeighted : bool, param isVertexT64 : bool, param isEdgeT64 : bool, param isWeightT64 : bool) :CSR_handle {
+  return NewCSRHandle(CSR(isWeighted, isVertexT64, isEdgeT64, isWeightT64), desc);
 }
-proc MakeCSR(param isWeighted : bool, param isVertexT64 : bool, param isEdgeT64 : bool, in isWeightT64 : bool, in numEdges : int(64), in numVerts : int(64)) :CSR_handle {
-  if (isWeightT64) {
-    return MakeCSR(isWeighted, isVertexT64, isEdgeT64, true, numEdges, numVerts);
+private proc MakeCSR(in desc : CSR_descriptor, param isWeighted : bool, param isVertexT64 : bool, param isEdgeT64 : bool) :CSR_handle {
+  if (desc.isWeightT64) {
+    return MakeCSR(desc, isWeighted, isVertexT64, isEdgeT64, true);
   } else {
-    return MakeCSR(isWeighted, isVertexT64, isEdgeT64, false, numEdges, numVerts);
+    return MakeCSR(desc, isWeighted, isVertexT64, isEdgeT64, false);
   }
 } 
-proc MakeCSR(param isWeighted : bool, param isVertexT64 : bool, in isEdgeT64 : bool, in isWeightT64 : bool, in numEdges : int(64), in numVerts : int(64)) :CSR_handle {
-  if (isEdgeT64) {
-    return MakeCSR(isWeighted, isVertexT64, true, isWeightT64, numEdges, numVerts);
+private proc MakeCSR(in desc : CSR_descriptor, param isWeighted : bool, param isVertexT64 : bool) :CSR_handle {
+  if (desc.isEdgeT64) {
+    return MakeCSR(desc, isWeighted, isVertexT64, true);
   } else {
-    return MakeCSR(isWeighted, isVertexT64, false, isWeightT64, numEdges, numVerts);
+    return MakeCSR(desc, isWeighted, isVertexT64, false);
   }
 }
-proc MakeCSR(param isWeighted : bool, in isVertexT64 : bool, in isEdgeT64 : bool, in isWeightT64 : bool, in numEdges : int(64), in numVerts : int(64)) :CSR_handle {
-  if (isVertexT64) {
-    return MakeCSR(isWeighted, true, isEdgeT64, isWeightT64, numEdges, numVerts);
+private proc MakeCSR(in desc: CSR_descriptor, param isWeighted : bool) :CSR_handle {
+  if (desc.isVertexT64) {
+    return MakeCSR(desc, isWeighted, true);
   } else {
-    return MakeCSR(isWeighted, false, isEdgeT64, isWeightT64, numEdges, numVerts);
+    return MakeCSR(desc, isWeighted, false);
   }
 }
-proc MakeCSR(in isWeighted : bool, in isVertexT64 : bool, in isEdgeT64 : bool, in isWeightT64 : bool, in numEdges = 0 : int(64), in numVerts = 0 : int(64)) :CSR_handle {
-  if (isWeighted) {
-    return MakeCSR(true, isVertexT64, isEdgeT64, isWeightT64, numEdges, numVerts);
+proc MakeCSR(in desc : CSR_descriptor) :CSR_handle {
+  if (desc.isWeighted) {
+    return MakeCSR(desc, true);
   } else {
-    return MakeCSR(false, isVertexT64, isEdgeT64, isWeightT64, numEdges, numVerts);
+    return MakeCSR(desc, false);
   }
 } 
 
