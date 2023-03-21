@@ -33,6 +33,6 @@ module Jaccard {
       EdgeCentric.jaccard(inCSR, outCSR);
     }
     //Write the output file
-    writeCSRFile(outFile, inCSR); //TODO replace with outCSR once we have a copy operator for CSR handles
+    writeCSRFile(outFile, outCSR); //TODO replace with outCSR once we have a copy operator for CSR handles
   }
 }
