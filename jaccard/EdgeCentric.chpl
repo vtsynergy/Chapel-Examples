@@ -1,3 +1,22 @@
+/*
+template <typename vertex_t, typename edge_t, typename weight_t>
+__global__ void jaccard_ec_scan(vertex_t n,
+                           edge_t const *csrPtr,
+                           vertex_t const *csrInd,
+                           vertex_t *dest_ind)
+{
+  edge_t tid, i;
+  tid = blockIdx.x*MAX_THREADS_PER_BLOCK + threadIdx.x;
+  if(tid<=n){
+  
+  //Ni=csrPtr[tid+1]-csrPtr[tid];
+  for(i=csrPtr[tid];i<csrPtr[tid+1];i++)
+  {
+   dest_ind[i]=tid;
+  }
+  }
+}*/
+
 module EdgeCentric {
   use CSR;
   use GPU;
@@ -7,29 +26,143 @@ module EdgeCentric {
     writeln("inCSR before: ", inGraph);
     writeln("outCSR before: ", outGraph);
     assert(!inType.isWeighted, "Edge-centric does not support weighted input graphs");
-
+    
     //Kernels happen here
     //This is a trivial that just writes the thread ID for each edge. Should be easy to convert to EC_scan
     on here.gpus[0] {
       //Declare device arrays, using element-types and sizes from the CSR objects for convenience
       var offsets: [outGraph.offDom] outGraph.offsets.eltType;
       var indices: [outGraph.idxDom] outGraph.indices.eltType;
+	  var dests: [outGraph.idxDom] outGraph.indices.eltType;
       var weights: [outGraph.weightDom] outGraph.weights.eltType;
+	  var jaccards: [outGraph.weightDom] outGraph.weights.eltType;
+	  var trusses: [outGraph.idxDom] outGraph.indices.eltType;
+	  var triangles: [outGraph.idxDom] outGraph.indices.eltType;
       //Copy data to device arrays
       offsets = inGraph.offsets;
       indices = inGraph.indices;
       //Do the kernel computation
-      forall i in indices.domain {
-        assertOnGpu(); //Fail if this can't be GPU-ized
-        weights[i] = i : outGraph.weights.eltType; //The domain index space is probably integral, convert to whatever real(?) that weights needs to be
-      }
+	  forall i in indices.domain {
+		//assertOnGpu(); //Fail if this can't be GPU-ized
+		  //forall i in (offsets.size - 1) {
+		if (i>=0) && (i<=offsets.size -1){
+		for j in offsets[i]..(offsets[i+1]-1)
+		{
+		 dests[j] = i:outGraph.indices.eltType; ; 
+			//weights[i] = i : outGraph.weights.eltType; //The domain index space is probably integral, convert to whatever real(?) that weights needs to be
+        }
+		}
+	  }
+	  
+	  //edge_t tid, i,  Ni, Nj, left, right, middle;
+	  //vertex_t row, col;
+	  //vertex_t ref, cur, ref_col, cur_col;
+		
+	 
+	  //perform JS computations
+	  forall i in indices.domain {
+		
+		var Ni : outGraph.indices.eltType; 
+	    var Nj : outGraph.indices.eltType; 
+	    var left : outGraph.indices.eltType; 
+	    var right : outGraph.indices.eltType;  
+	    var middle : outGraph.indices.eltType; 
+		
+	    var row : outGraph.offsets.eltType; 
+	    var col : outGraph.offsets.eltType; 
+	    var refs : outGraph.offsets.eltType; 
+	    var cur : outGraph.offsets.eltType;
+	    var ref_col : outGraph.offsets.eltType;
+	    var cur_col : outGraph.offsets.eltType;
+		//edge_t tid, i,  Ni, Nj, left, right, middle;
+		//vertex_t row, col;
+		//vertex_t ref, cur, ref_col, cur_col;
+		
+		row = indices[i];
+		col = dests[i];
+		Ni  = offsets[row + 1] - offsets[row];
+		Nj  = offsets[col + 1] - offsets[col];
+		//ref = (Ni < Nj) ? row : col;
+		refs = col ;
+		if (Ni <Nj){
+		    refs = row ;
+		}
+		cur = row;
+		//cur = (Ni < Nj) ? col : row;
+		if (Ni <Nj){  
+			cur = col ;
+		}
+		// col = csrInd[j];
+        // compute new intersection weights
+        // search for the element with the same column index in the reference row
+		// for (i = csrPtr[ref] ; i < csrPtr[ref + 1]; i ++) {
+		
+		for j in offsets[refs]..(offsets[refs+1]-1){
+			ref_col = indices[j];
+			// binary search (column indices are sorted within each row)
+			left  = offsets[cur];
+			right = offsets[cur + 1] - 1;
+			while (left <= right) {
+			  middle = (left + right) >> 1;
+			  cur_col       = indices[middle];
+			  if (cur_col > ref_col) {
+				right = middle - 1;
+			  } else if (cur_col < ref_col) {
+				left = middle + 1;
+			  } else {
+				weights[i] = weights[i]+1;
+				break;
+			  }
+			}
+	    }
+		
+		
+		
+	 //var trusses: [outGraph.offDom] outGraph.offsets.eltType;
+	 // var triangles: [outGraph.offDom] outGraph.offsets.eltType;
+         // seperate kernel for the weights[tid]= weight_j[tid]/((weight_t)(Ni+Nj)-weight_j[tid]);
+	  }
+	  
+	  forall i in indices.domain {
+		var Ni : outGraph.indices.eltType; 
+	    var Nj : outGraph.indices.eltType; 
+	    
+	    var row : outGraph.offsets.eltType; 
+	    var col : outGraph.offsets.eltType; 
+		
+		row = indices[i];
+		col = dests[i];
+		Ni  = offsets[row + 1] - offsets[row];
+		Nj  = offsets[col + 1] - offsets[col];
+		triangles[i] = weights[i]:outGraph.indices.eltType; 
+		if (triangles[i] > 0){
+			  trusses[i] = triangles[i] + 2;
+		}
+		jaccards[i]= weights[i]/(Ni + Nj - weights[i]);
+		//assertOnGpu(); //Fail if this can't be GPU-ized
+		  //forall i in (offsets.size - 1) {
+		
+	  }
       //Copy arrays out
+	  //dest_inds = dests;
       outGraph.offsets = offsets;
       outGraph.indices = indices;
       outGraph.weights = weights;
+	 // writeln("dests are ", dests);
     }
-    writeln("inCSR after: ", inGraph);
+	//writeln("offsets1 ", outGraph.offsets[1]);
+	//writeln("offsets2 ", outGraph.offsets[2]);
+    //for i in outGraph.offsets[1]..outGraph.offsets[2] do
+	//	writeln("hello #", i);
+	
+	writeln("inCSR after: ", inGraph);
     writeln("outCSR after: ", outGraph);
+	var count : outGraph.indices.eltType; 
+	for k in outGraph.indices.domain{
+	   if ( outGraph.weights[k] > 0:outGraph.weights.eltType){
+		   count = count + 1;
+	}}
+	writeln(" Pairs with non zero intersection : ", count);
   }
 
   //FIXME: Should the intermediate steps be privatized?
