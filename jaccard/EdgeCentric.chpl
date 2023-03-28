@@ -42,10 +42,14 @@ module EdgeCentric {
       offsets = inGraph.offsets;
       indices = inGraph.indices;
       //Do the kernel computation
+      //This needs to be copied out of the `unmanaged CSR` instance to be usable in 1.29
+      //If you use inGraph.numVerts directly in the if statement below, it appears to cancel most of the threads
+      var offSize = inGraph.numVerts;
+          //Scan
 	  forall i in indices.domain {
-		//assertOnGpu(); //Fail if this can't be GPU-ized
+		assertOnGpu(); //Fail if this can't be GPU-ized
 		  //forall i in (offsets.size - 1) {
-		if (i>=0) && (i<=offsets.size -1){
+		if (i>=0) && (i<=offSize){
 		for j in offsets[i]..(offsets[i+1]-1)
 		{
 		 dests[j] = i:outGraph.indices.eltType; ; 
@@ -60,7 +64,9 @@ module EdgeCentric {
 		
 	 
 	  //perform JS computations
+          //Intersection
 	  forall i in indices.domain {
+		assertOnGpu(); //Fail if this can't be GPU-ized
 		
 		var Ni : outGraph.indices.eltType; 
 	    var Nj : outGraph.indices.eltType; 
@@ -123,7 +129,9 @@ module EdgeCentric {
          // seperate kernel for the weights[tid]= weight_j[tid]/((weight_t)(Ni+Nj)-weight_j[tid]);
 	  }
 	  
+          //Weights
 	  forall i in indices.domain {
+		assertOnGpu(); //Fail if this can't be GPU-ized
 		var Ni : outGraph.indices.eltType; 
 	    var Nj : outGraph.indices.eltType; 
 	    
@@ -139,7 +147,6 @@ module EdgeCentric {
 			  trusses[i] = triangles[i] + 2;
 		}
 		jaccards[i]= weights[i]/(Ni + Nj - weights[i]);
-		//assertOnGpu(); //Fail if this can't be GPU-ized
 		  //forall i in (offsets.size - 1) {
 		
 	  }
