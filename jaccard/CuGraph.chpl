@@ -7,8 +7,6 @@ module CuGraph {
   proc VC_Jaccard(type inType : unmanaged CSR, in inGraph : inType, type outType : unmanaged CSR(isWeighted = true), ref outGraph : outType) {
     //Do stuff
     writeln("Vertex Centric");
-    writeln(inType : string);
-    writeln(outType : string);
     assert(!inType.isWeighted, "Vertex-centric weighted input support not yet implemented");
 
     //Kernels happen here
@@ -49,7 +47,8 @@ module CuGraph {
       for row in z..<inGraph.numVerts by isZGrid*isZBlock {//Rows/Z
         forall y in 0..<isYGrid*isYBlock {
         for j in (offsets[row]+y)..<offsets[row+1] by isYGrid*isYBlock {  //offsets[row..row+1]/Y
-          var col = indices[y];
+          //assertOnGpu(); //Fail if this can't be GPU-ized
+          var col = indices[j];
           // find which row has least elements (and call it reference row)
           var Ni = offsets[row+1] - offsets[row];
           var Nj = offsets[col+1] - offsets[col];
@@ -100,6 +99,7 @@ module CuGraph {
       
       //JaccardWeights
       forall x in weights.domain {
+          //assertOnGpu(); //Fail if this can't be GPU-ized
         //FIXME, could an order qualifer give better performance?
         var Wi = intersectWeight[x].read();
         var Ws = neighborSum[x];
@@ -112,8 +112,6 @@ module CuGraph {
       outGraph.indices = indices;
       outGraph.weights = weights;
     }
-    writeln("inCSR after: ", inGraph);
-    writeln("outCSR after: ", outGraph);
   }
 
   //FIXME: Should the intermediate steps be privatized?
