@@ -147,7 +147,7 @@ module EdgeCentric {
 	  //dest_inds = dests;
       outGraph.offsets = offsets;
       outGraph.indices = indices;
-      outGraph.weights = weights;
+      outGraph.weights = jaccards;
 	 // writeln("dests are ", dests);
     }
 	//writeln("offsets1 ", outGraph.offsets[1]);
