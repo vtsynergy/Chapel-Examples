@@ -17,7 +17,7 @@ prototype module CSR {
     isWeightT64 = 1 << 6,
   };
 
-  private param CSR_BINARY_FORMAT_VERSION : int(64) = 1;
+  private param CSR_BINARY_FORMAT_VERSION : int(64) = 2;
   record CSR_file_header {
     var binaryFormatVersion : int(64) = CSR_BINARY_FORMAT_VERSION;
     var numVerts : int(64) = 0;
