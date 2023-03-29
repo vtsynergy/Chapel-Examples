@@ -23,8 +23,6 @@ module EdgeCentric {
 
   proc EC_Jaccard(type inType : unmanaged CSR, in inGraph : inType, type outType : unmanaged CSR(isWeighted = true), ref outGraph : outType) {
     writeln("Edge Centric");
-    writeln("inCSR before: ", inGraph);
-    writeln("outCSR before: ", outGraph);
     assert(!inType.isWeighted, "Edge-centric does not support weighted input graphs");
     
     //Kernels happen here
@@ -162,8 +160,6 @@ module EdgeCentric {
     //for i in outGraph.offsets[1]..outGraph.offsets[2] do
 	//	writeln("hello #", i);
 	
-	writeln("inCSR after: ", inGraph);
-    writeln("outCSR after: ", outGraph);
 	var count : outGraph.indices.eltType; 
 	for k in outGraph.indices.domain{
 	   if ( outGraph.weights[k] > 0:outGraph.weights.eltType){
