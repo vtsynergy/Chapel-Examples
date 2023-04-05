@@ -20,6 +20,7 @@ __global__ void jaccard_ec_scan(vertex_t n,
 module EdgeCentric {
   use CSR;
   use GPU;
+  use Time;
 
   proc EC_Jaccard(type inType : unmanaged CSR, in inGraph : inType, type outType : unmanaged CSR(isWeighted = true), ref outGraph : outType) {
     writeln("Edge Centric");
@@ -27,6 +28,12 @@ module EdgeCentric {
     
     //Kernels happen here
     //This is a trivial that just writes the thread ID for each edge. Should be easy to convert to EC_scan
+    var gpu_region_time : stopwatch;
+    var scan_time : stopwatch;
+    var intersect_time : stopwatch;
+    var weights_time : stopwatch;
+    gpu_region_time.clear();
+    gpu_region_time.start();
     on here.gpus[0] {
       //Declare device arrays, using element-types and sizes from the CSR objects for convenience
       var offsets: [outGraph.offDom] outGraph.offsets.eltType;
@@ -43,6 +50,8 @@ module EdgeCentric {
       //This needs to be copied out of the `unmanaged CSR` instance to be usable in 1.29
       //If you use inGraph.numVerts directly in the if statement below, it appears to cancel most of the threads
       var offSize = inGraph.numVerts;
+          scan_time.clear();
+          scan_time.start();
           //Scan
 	  forall i in indices.domain {
 		assertOnGpu(); //Fail if this can't be GPU-ized
@@ -55,6 +64,7 @@ module EdgeCentric {
         }
 		}
 	  }
+          scan_time.stop();
 	  
 	  //edge_t tid, i,  Ni, Nj, left, right, middle;
 	  //vertex_t row, col;
@@ -63,6 +73,8 @@ module EdgeCentric {
 	 
 	  //perform JS computations
           //Intersection
+          intersect_time.clear();
+          intersect_time.start();
 	  forall i in indices.domain {
 		assertOnGpu(); //Fail if this can't be GPU-ized
 		
@@ -126,8 +138,11 @@ module EdgeCentric {
 	 // var triangles: [outGraph.offDom] outGraph.offsets.eltType;
          // seperate kernel for the weights[tid]= weight_j[tid]/((weight_t)(Ni+Nj)-weight_j[tid]);
 	  }
+          intersect_time.stop();
 	  
           //Weights
+          weights_time.clear();
+          weights_time.start();
 	  forall i in indices.domain {
 		assertOnGpu(); //Fail if this can't be GPU-ized
 		var Ni : outGraph.indices.eltType; 
@@ -148,6 +163,7 @@ module EdgeCentric {
 		  //forall i in (offsets.size - 1) {
 		
 	  }
+          weights_time.stop();
       //Copy arrays out
 	  //dest_inds = dests;
       outGraph.offsets = offsets;
@@ -155,6 +171,11 @@ module EdgeCentric {
       outGraph.weights = jaccards;
 	 // writeln("dests are ", dests);
     }
+    gpu_region_time.stop();
+    writeln("EC_Scan Elapsed (s): ", scan_time.elapsed());
+    writeln("EC_Intersect Elapsed (s): ", intersect_time.elapsed());
+    writeln("EC_Weights Elapsed (s): ", weights_time.elapsed());
+    writeln("EC_GPU_Region Elapsed (s): ", gpu_region_time.elapsed());
 	//writeln("offsets1 ", outGraph.offsets[1]);
 	//writeln("offsets2 ", outGraph.offsets[2]);
     //for i in outGraph.offsets[1]..outGraph.offsets[2] do
