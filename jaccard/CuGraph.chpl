@@ -1,6 +1,8 @@
 module CuGraph {
   use CSR;
   use GPU;
+  use Time;
+
   param MAX_GPU_BLOCKS=33554432;
 //  param MAX_GPU_BLOCKS=65535;
 
@@ -11,6 +13,13 @@ module CuGraph {
 
     //Kernels happen here
     //This is a trivial that just writes the thread ID for each edge
+    var gpu_region_time : stopwatch;
+    var rowsum_time : stopwatch;
+    var fill_time : stopwatch;
+    var intersect_time : stopwatch;
+    var weights_time : stopwatch;
+    gpu_region_time.clear();
+    gpu_region_time.start();
     on here.gpus[0] {
       //Declare device arrays, using element-types and sizes from the CSR objects for convenience
       var offsets: [outGraph.offDom] outGraph.offsets.eltType;
@@ -21,6 +30,8 @@ module CuGraph {
       indices = inGraph.indices;
       //RowSum
       var partialSum: [offsets.domain.interior(-inGraph.numVerts)] outGraph.weights.eltType; //We only want the first numVerts elements starting at 0 (not the element at numVerts)
+      rowsum_time.clear();
+      rowsum_time.start();
       forall x in partialSum.domain {
         var start = offsets[x];
         var end = offsets[x+1];
@@ -31,10 +42,14 @@ module CuGraph {
           partialSum[x] = end-start;
         }
       }
+      rowsum_time.stop();
       //Fill is trivial
       var intersectWeight: [outGraph.weightDom] atomic outGraph.weights.eltType;
       var neighborSum: [outGraph.weightDom] outGraph.weights.eltType;
+      fill_time.clear();
+      fill_time.start();
       intersectWeight = 0.0 : outGraph.weights.eltType;
+      fill_time.stop();
       //Intersection
       param isYBlock = 4;
       param isXBlock = 32 / isYBlock;
@@ -43,6 +58,8 @@ module CuGraph {
       var isYGrid = 1;
       var isZGrid = min((inGraph.numVerts + isZBlock -1)/isZBlock, MAX_GPU_BLOCKS);
       //Each of these double-loop lines is using the forall to define the CUDA grid/block dimensions, and the for to do the corresponding intra-thread loop
+      intersect_time.clear();
+      intersect_time.start();
       forall z in 0..<isZGrid*isZBlock {
       for row in z..<inGraph.numVerts by isZGrid*isZBlock {//Rows/Z
         forall y in 0..<isYGrid*isYBlock {
@@ -96,8 +113,11 @@ module CuGraph {
           } } //close 'z' forall and 'i' for loops
         } } //close 'y' forall and 'j' for loops
       } } //close 'z' forall and 'row' for loops
+      intersect_time.stop();
       
       //JaccardWeights
+      weights_time.clear();
+      weights_time.start();
       forall x in weights.domain {
           //assertOnGpu(); //Fail if this can't be GPU-ized
         //FIXME, could an order qualifer give better performance?
@@ -106,12 +126,19 @@ module CuGraph {
         var Wu = Ws - Wi;
         weights[x] = (Wi / Wu);
       }
+      weights_time.stop();
       //Copy arrays out
       //FIXME, once we can coerce on the host, no need to write offsets/indices here
       outGraph.offsets = offsets;
       outGraph.indices = indices;
       outGraph.weights = weights;
     }
+    gpu_region_time.stop();
+    writeln("VC_RowSum Elapsed (s): ", rowsum_time.elapsed());
+    writeln("VC_Fill Elapsed (s): ", fill_time.elapsed());
+    writeln("VC_Intersect Elapsed (s): ", intersect_time.elapsed());
+    writeln("VC_Weights Elapsed (s): ", weights_time.elapsed());
+    writeln("VC_GPU_Region Elapsed (s): ", gpu_region_time.elapsed());
   }
 
   //FIXME: Should the intermediate steps be privatized?
