@@ -179,7 +179,7 @@ module CuGraph {
           var i = offsets[refer]+tid.global_id(0);
           while (i < offsets[refer+1]) {
           //for i in (offsets[refer]+tid.global_id(0))..<offsets[refer+1] by tid.global_dim(0) { // offsets[ref..ref+1] / Z
-            //assertOnGpu(); //Fail if this can't be GPU-ized
+            assertOnGpu(); //Fail if this can't be GPU-ized
             var match = -1 : outGraph.indices.eltType;
             var ref_col = indices[i];
             var ref_val : outGraph.weights.eltType;
@@ -208,21 +208,6 @@ module CuGraph {
 
             //If the element with the same column index in the reference row has been found
             if (match != -1) {
-              //TODO, do we need an order qualifier?
-//              intersectWeight[j].add(ref_val);
-      /*        if (outType.isWeightT64) {
-                if (outType.isEdgeT64) {
-                  dp_atomAdd_id64(c_intersects, j, ref_val);
-                } else {
-                  dp_atomAdd(c_intersects, j, ref_val);
-                }
-              } else {
-                if (outType.isEdgeT64) {
-                  fp_atomAdd_id64(c_intersects, j, ref_val);
-                } else {
-                  fp_atomAdd(c_intersects, j, ref_val);
-                }
-              }*/
               ex_atomAdd(c_intersects, j, ref_val);
             }
           i += tid.global_dim(0);
@@ -235,11 +220,9 @@ module CuGraph {
 
       if (isectFile != "") { 
         var tempIsectCSR = ReinterpretCSRHandle(outType, isectCSR);
-        forall i in intersectWeight.domain {
-          tempIsectCSR.weights[i] = intersectWeight[i].read();
-        }
         tempIsectCSR.offsets = offsets;
         tempIsectCSR.indices = indices;
+        tempIsectCSR.weights = intersectWeight;
       }
       
       //JaccardWeights
@@ -248,7 +231,7 @@ module CuGraph {
       forall x in weights.domain {
           assertOnGpu(); //Fail if this can't be GPU-ized
         //FIXME, could an order qualifer give better performance?
-        var Wi = intersectWeight[x].read();
+        var Wi = intersectWeight[x];
         var Ws = neighborSum[x];
         var Wu = Ws - Wi;
         weights[x] = (Wi / Wu);
