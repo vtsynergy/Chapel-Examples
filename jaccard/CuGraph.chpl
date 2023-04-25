@@ -2,6 +2,30 @@ module CuGraph {
   use CSR;
   use GPU;
   use Time;
+  use CTypes;
+
+  extern {
+    //Credit: Andy Stone @ HPE for this atomic workaround
+    #include <cuda.h>
+    #include <cuda_runtime.h>
+    #include <cuda_runtime_api.h>
+
+    __device__ static inline void fp_atomAdd(float *buf, int idx, float val) {
+      atomicAdd(&buf[idx], val);
+    }
+    __host__ static inline void fp_atomAdd(float *buf, int idx, float val) {}
+
+    __device__ static inline void dp_atomAdd(double *buf, int idx, double val) {
+      atomicAdd(&buf[idx], val);
+    }
+    __host__ static inline void dp_atomAdd(double *buf, int idx, double val) {}
+  }
+
+  pragma "codegen for GPU"
+  extern proc fp_atomAdd(buf : c_ptr(c_float), idx : c_int, val : c_float);
+  pragma "codegen for GPU"
+  extern proc dp_atomAdd(buf : c_ptr(c_double), idx : c_int, val : c_double);
+
 
   param MAX_GPU_BLOCKS=33554432;
 //  param MAX_GPU_BLOCKS=65535;
@@ -85,7 +109,7 @@ module CuGraph {
       }
       rowsum_time.stop();
       //Fill is trivial
-      var intersectWeight: [outGraph.weightDom] atomic outGraph.weights.eltType;
+      var intersectWeight: [outGraph.weightDom] outGraph.weights.eltType;
       var neighborSum: [outGraph.weightDom] outGraph.weights.eltType;
       fill_time.clear();
       fill_time.start();
@@ -98,6 +122,9 @@ module CuGraph {
       var isXGrid = 1;
       var isYGrid = 1;
       var isZGrid = min((inGraph.numVerts + isZBlock -1)/isZBlock, MAX_GPU_BLOCKS);
+
+      //Atomic workaround needs a c_ptr to the intersection array
+      var c_intersects = c_ptrTo(intersectWeight);
 
       //Yanked from EdgeCentric
       //If you use inGraph.numVerts directly in the if statement below, it appears to cancel most of the threads
@@ -168,7 +195,12 @@ module CuGraph {
             //If the element with the same column index in the reference row has been found
             if (match != -1) {
               //TODO, do we need an order qualifier?
-              intersectWeight[j].add(ref_val);
+//              intersectWeight[j].add(ref_val);
+              if (outType.isWeightT64) {
+                dp_atomAdd(c_intersects, j, ref_val);
+              } else {
+                fp_atomAdd(c_intersects, j, ref_val);
+              }
             }
           i += tid.global_dim(0);
           } //} //close 'z' forall and 'i' for loops
