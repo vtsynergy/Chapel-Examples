@@ -19,12 +19,26 @@ module CuGraph {
       atomicAdd(&buf[idx], val);
     }
     __host__ static inline void dp_atomAdd(double *buf, int idx, double val) {}
+
+    __device__ static inline void fp_atomAdd_id64(float *buf, int64_t idx, float val) {
+      atomicAdd(&buf[idx], val);
+    }
+    __host__ static inline void fp_atomAdd_id64(float *buf, int64_t idx, float val) {}
+
+    __device__ static inline void dp_atomAdd_id64(double *buf, int64_t idx, double val) {
+      atomicAdd(&buf[idx], val);
+    }
+    __host__ static inline void dp_atomAdd_id64(double *buf, int64_t idx, double val) {}
   }
 
   pragma "codegen for GPU"
-  extern proc fp_atomAdd(buf : c_ptr(c_float), idx : c_int, val : c_float);
+  extern "fp_atomAdd" proc ex_atomAdd(buf : c_ptr(c_float), idx : c_int, val : c_float);
   pragma "codegen for GPU"
-  extern proc dp_atomAdd(buf : c_ptr(c_double), idx : c_int, val : c_double);
+  extern "dp_atomAdd" proc ex_atomAdd(buf : c_ptr(c_double), idx : c_int, val : c_double);
+  pragma "codegen for GPU"
+  extern "fp_atomAdd_id64" proc ex_atomAdd(buf : c_ptr(c_float), idx : c_longlong, val : c_float);
+  pragma "codegen for GPU"
+  extern "dp_atomAdd_id64" proc ex_atomAdd(buf : c_ptr(c_double), idx : c_longlong, val : c_double);
 
 
   param MAX_GPU_BLOCKS=33554432;
@@ -196,11 +210,20 @@ module CuGraph {
             if (match != -1) {
               //TODO, do we need an order qualifier?
 //              intersectWeight[j].add(ref_val);
-              if (outType.isWeightT64) {
-                dp_atomAdd(c_intersects, j, ref_val);
+      /*        if (outType.isWeightT64) {
+                if (outType.isEdgeT64) {
+                  dp_atomAdd_id64(c_intersects, j, ref_val);
+                } else {
+                  dp_atomAdd(c_intersects, j, ref_val);
+                }
               } else {
-                fp_atomAdd(c_intersects, j, ref_val);
-              }
+                if (outType.isEdgeT64) {
+                  fp_atomAdd_id64(c_intersects, j, ref_val);
+                } else {
+                  fp_atomAdd(c_intersects, j, ref_val);
+                }
+              }*/
+              ex_atomAdd(c_intersects, j, ref_val);
             }
           i += tid.global_dim(0);
           } //} //close 'z' forall and 'i' for loops
@@ -223,7 +246,7 @@ module CuGraph {
       weights_time.clear();
       weights_time.start();
       forall x in weights.domain {
-          //assertOnGpu(); //Fail if this can't be GPU-ized
+          assertOnGpu(); //Fail if this can't be GPU-ized
         //FIXME, could an order qualifer give better performance?
         var Wi = intersectWeight[x].read();
         var Ws = neighborSum[x];
