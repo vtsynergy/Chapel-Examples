@@ -6,6 +6,38 @@ module CuGraph {
   param MAX_GPU_BLOCKS=33554432;
 //  param MAX_GPU_BLOCKS=65535;
 
+  //Mix some CUDA and SYCL abstractions
+  //For tuples, X=0, Y=1, Z=2
+  record nd_item {
+    var global_id : 3*int;
+    var block_id : 3*int;
+    var thread_id : 3*int;
+    var global_dim : 3*int;
+    var grid_dim : 3*int;
+    var block_dim : 3*int;
+  }
+
+  //Just a shorthand to de-linearize the ID
+  //For tuples, X=0, Y=1, Z=2
+  proc get_ND_ID(in gridDim : 3*int, in blockDim : 3*int, in linearID : int) : nd_item {
+    var ret : nd_item;
+    ret.block_dim = blockDim;
+    ret.grid_dim = gridDim;
+    ret.global_dim = ((blockDim(0)*gridDim(0)), (blockDim(1)*gridDim(1)), (blockDim(2)*gridDim(2)));
+    var inBlockLinear = linearID % (blockDim(0)*blockDim(1)*blockDim(2));
+    var blockLinear = linearID / (blockDim(0)*blockDim(1)*blockDim(2)) : int;
+    ret.thread_id(0) = inBlockLinear % blockDim(0);
+    ret.thread_id(1) = (inBlockLinear / blockDim(0)) : int % (blockDim(1));
+    ret.thread_id(2) = (inBlockLinear / (blockDim(0) * blockDim(1))) : int;
+    ret.block_id(0) = blockLinear % gridDim(0);
+    ret.block_id(1) = (blockLinear / gridDim(0)) : int % (gridDim(1));
+    ret.block_id(2) = (blockLinear / (gridDim(0) * gridDim(1))) : int;
+    ret.global_id(0) = ret.thread_id(0) + ret.block_id(0)*blockDim(0);
+    ret.global_id(1) = ret.thread_id(1) + ret.block_id(1)*blockDim(1);
+    ret.global_id(2) = ret.thread_id(2) + ret.block_id(2)*blockDim(2);
+    return ret;
+  }
+
   proc VC_Jaccard(type inType : unmanaged CSR, in inGraph : inType, type outType : unmanaged CSR(isWeighted = true), ref outGraph : outType) {
     //Do stuff
     writeln("Vertex Centric");
