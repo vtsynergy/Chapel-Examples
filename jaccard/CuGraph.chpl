@@ -89,13 +89,18 @@ module CuGraph {
       var isXGrid = 1;
       var isYGrid = 1;
       var isZGrid = min((inGraph.numVerts + isZBlock -1)/isZBlock, MAX_GPU_BLOCKS);
-      //Each of these double-loop lines is using the forall to define the CUDA grid/block dimensions, and the for to do the corresponding intra-thread loop
+
+      //As of 1.30, only 1D foralls are supported, need to convert 3D->linear->3D threads
+      var workSize = ((isXBlock*isXGrid)*(isYBlock*isYGrid)*(isZBlock*isZGrid));
       intersect_time.clear();
       intersect_time.start();
-      forall z in 0..<isZGrid*isZBlock {
-      for row in z..<inGraph.numVerts by isZGrid*isZBlock {//Rows/Z
-        forall y in 0..<isYGrid*isYBlock {
-        for j in (offsets[row]+y)..<offsets[row+1] by isYGrid*isYBlock {  //offsets[row..row+1]/Y
+      forall linear_id in 0..<workSize {
+      var tid = get_ND_ID((isXGrid, isYGrid, isZGrid), (isXBlock, isYBlock, isZBlock), linear_id);
+      //Each of these double-loop lines is using the forall to define the CUDA grid/block dimensions, and the for to do the corresponding intra-thread loop
+      //forall z in 0..<isZGrid*isZBlock {
+      for row in (tid.global_id(2))..<inGraph.numVerts by tid.global_dim(2) {//Rows/Z
+        //forall y in 0..<isYGrid*isYBlock {
+        for j in (offsets[row]+tid.global_id(1))..<offsets[row+1] by tid.global_dim(1) {  //offsets[row..row+1]/Y
           //assertOnGpu(); //Fail if this can't be GPU-ized
           var col = indices[j];
           // find which row has least elements (and call it reference row)
@@ -109,8 +114,8 @@ module CuGraph {
           
           //compute new intersection weights
           // search for the element with the same column index in the reference row
-          forall x in 0..<isXGrid*isXBlock {
-          for i in (offsets[refer]+x)..<offsets[refer+1] by isXGrid*isXBlock { // offsets[ref..ref+1] / Z
+          //forall x in 0..<isXGrid*isXBlock {
+          for i in (offsets[refer]+tid.global_id(0))..<offsets[refer+1] by tid.global_dim(0) { // offsets[ref..ref+1] / Z
             var match = -1 : outGraph.indices.eltType;
             var ref_col = indices[i];
             var ref_val : outGraph.weights.eltType;
@@ -142,8 +147,8 @@ module CuGraph {
               //TODO, do we need an order qualifier?
               intersectWeight[j].add(ref_val);
             }
-          } } //close 'z' forall and 'i' for loops
-        } } //close 'y' forall and 'j' for loops
+          } //} //close 'z' forall and 'i' for loops
+        } //} //close 'y' forall and 'j' for loops
       } } //close 'z' forall and 'row' for loops
       intersect_time.stop();
       
