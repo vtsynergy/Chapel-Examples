@@ -98,9 +98,14 @@ module CuGraph {
       var tid = get_ND_ID((isXGrid, isYGrid, isZGrid), (isXBlock, isYBlock, isZBlock), linear_id);
       //Each of these double-loop lines is using the forall to define the CUDA grid/block dimensions, and the for to do the corresponding intra-thread loop
       //forall z in 0..<isZGrid*isZBlock {
-      for row in (tid.global_id(2))..<inGraph.numVerts by tid.global_dim(2) {//Rows/Z
+      //Since by clauses are breaking GPU-ization in 1.30, replace with whiles
+      var row = tid.global_id(2) : outGraph.offsets.eltType;
+      while (row < inGraph.numVerts) {
+      //for row in (tid.global_id(2))..<inGraph.numVerts by tid.global_dim(2) {//Rows/Z
         //forall y in 0..<isYGrid*isYBlock {
-        for j in (offsets[row]+tid.global_id(1))..<offsets[row+1] by tid.global_dim(1) {  //offsets[row..row+1]/Y
+        var j = offsets[row]+tid.global_id(1);
+        while (j < offsets[row+1]) {
+        //for j in (offsets[row]+tid.global_id(1))..<offsets[row+1] by tid.global_dim(1) {  //offsets[row..row+1]/Y
           //assertOnGpu(); //Fail if this can't be GPU-ized
           var col = indices[j];
           // find which row has least elements (and call it reference row)
@@ -115,7 +120,9 @@ module CuGraph {
           //compute new intersection weights
           // search for the element with the same column index in the reference row
           //forall x in 0..<isXGrid*isXBlock {
-          for i in (offsets[refer]+tid.global_id(0))..<offsets[refer+1] by tid.global_dim(0) { // offsets[ref..ref+1] / Z
+          var i = offsets[refer]+tid.global_id(0);
+          while (i < offsets[refer+1]) {
+          //for i in (offsets[refer]+tid.global_id(0))..<offsets[refer+1] by tid.global_dim(0) { // offsets[ref..ref+1] / Z
             var match = -1 : outGraph.indices.eltType;
             var ref_col = indices[i];
             var ref_val : outGraph.weights.eltType;
@@ -147,8 +154,11 @@ module CuGraph {
               //TODO, do we need an order qualifier?
               intersectWeight[j].add(ref_val);
             }
+          i += tid.global_dim(0);
           } //} //close 'z' forall and 'i' for loops
+        j += tid.global_dim(1);
         } //} //close 'y' forall and 'j' for loops
+      row += tid.global_dim(2) : outGraph.offsets.eltType;
       } } //close 'z' forall and 'row' for loops
       intersect_time.stop();
       
