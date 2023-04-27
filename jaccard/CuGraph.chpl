@@ -90,6 +90,10 @@ module CuGraph {
       var isYGrid = 1;
       var isZGrid = min((inGraph.numVerts + isZBlock -1)/isZBlock, MAX_GPU_BLOCKS);
 
+      //Yanked from EdgeCentric
+      //If you use inGraph.numVerts directly in the if statement below, it appears to cancel most of the threads
+      var offSize = inGraph.numVerts;
+
       //As of 1.30, only 1D foralls are supported, need to convert 3D->linear->3D threads
       var workSize : int(64) = ((isXBlock*isXGrid)*(isYBlock*isYGrid)*(isZBlock*isZGrid));
       intersect_time.clear();
@@ -100,13 +104,12 @@ module CuGraph {
       //forall z in 0..<isZGrid*isZBlock {
       //Since by clauses are breaking GPU-ization in 1.30, replace with whiles
       var row = tid.global_id(2) : outGraph.offsets.eltType;
-      while (row < inGraph.numVerts) {
+      while (row < offSize) {
       //for row in (tid.global_id(2))..<inGraph.numVerts by tid.global_dim(2) {//Rows/Z
         //forall y in 0..<isYGrid*isYBlock {
         var j = offsets[row]+tid.global_id(1);
         while (j < offsets[row+1]) {
         //for j in (offsets[row]+tid.global_id(1))..<offsets[row+1] by tid.global_dim(1) {  //offsets[row..row+1]/Y
-          //assertOnGpu(); //Fail if this can't be GPU-ized
           var col = indices[j];
           // find which row has least elements (and call it reference row)
           var Ni = offsets[row+1] - offsets[row];
@@ -123,6 +126,7 @@ module CuGraph {
           var i = offsets[refer]+tid.global_id(0);
           while (i < offsets[refer+1]) {
           //for i in (offsets[refer]+tid.global_id(0))..<offsets[refer+1] by tid.global_dim(0) { // offsets[ref..ref+1] / Z
+            assertOnGpu(); //Fail if this can't be GPU-ized
             var match = -1 : outGraph.indices.eltType;
             var ref_col = indices[i];
             var ref_val : outGraph.weights.eltType;
