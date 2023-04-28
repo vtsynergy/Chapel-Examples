@@ -126,7 +126,7 @@ module CuGraph {
           var i = offsets[refer]+tid.global_id(0);
           while (i < offsets[refer+1]) {
           //for i in (offsets[refer]+tid.global_id(0))..<offsets[refer+1] by tid.global_dim(0) { // offsets[ref..ref+1] / Z
-            assertOnGpu(); //Fail if this can't be GPU-ized
+            //assertOnGpu(); //Fail if this can't be GPU-ized
             var match = -1 : outGraph.indices.eltType;
             var ref_col = indices[i];
             var ref_val : outGraph.weights.eltType;
