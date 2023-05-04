@@ -37,11 +37,17 @@ module CuGraph {
     ret.global_id(2) = ret.thread_id(2) + ret.block_id(2)*blockDim(2);
     return ret;
   }
-
+  config var isectFile = "" : string;
   proc VC_Jaccard(type inType : unmanaged CSR, in inGraph : inType, type outType : unmanaged CSR(isWeighted = true), ref outGraph : outType) {
     //Do stuff
     writeln("Vertex Centric");
     assert(!inType.isWeighted, "Vertex-centric weighted input support not yet implemented");
+
+    //Debug intersections
+    var isectCSR : CSR_handle;
+    if (isectFile != "") { 
+      isectCSR = MakeCSR(outGraph.getDescriptor());
+    }
 
     //Kernels happen here
     //This is a trivial that just writes the thread ID for each edge
@@ -50,6 +56,9 @@ module CuGraph {
     var fill_time : stopwatch;
     var intersect_time : stopwatch;
     var weights_time : stopwatch;
+    var writeWork : int(64);
+    var writeBlock : 3*int(64);
+    var writeGrid : 3*int(64);
     gpu_region_time.clear();
     gpu_region_time.start();
     on here.gpus[0] {
@@ -96,6 +105,9 @@ module CuGraph {
 
       //As of 1.30, only 1D foralls are supported, need to convert 3D->linear->3D threads
       var workSize : int(64) = ((isXBlock*isXGrid)*(isYBlock*isYGrid)*(isZBlock*isZGrid));
+      writeWork = workSize;
+      writeGrid = (isXGrid, isYGrid, isZGrid);
+      writeBlock =(isXBlock, isYBlock, isZBlock);  
       intersect_time.clear();
       intersect_time.start();
       forall linear_id in 0..<workSize {
@@ -165,6 +177,15 @@ module CuGraph {
       row += tid.global_dim(2) : outGraph.offsets.eltType;
       } } //close 'z' forall and 'row' for loops
       intersect_time.stop();
+
+      if (isectFile != "") { 
+        var tempIsectCSR = ReinterpretCSRHandle(outType, isectCSR);
+        forall i in intersectWeight.domain {
+          tempIsectCSR.weights[i] = intersectWeight[i].read();
+        }
+        tempIsectCSR.offsets = offsets;
+        tempIsectCSR.indices = indices;
+      }
       
       //JaccardWeights
       weights_time.clear();
@@ -190,6 +211,10 @@ module CuGraph {
     writeln("VC_Intersect Elapsed (s): ", intersect_time.elapsed());
     writeln("VC_Weights Elapsed (s): ", weights_time.elapsed());
     writeln("VC_GPU_Region Elapsed (s): ", gpu_region_time.elapsed());
+    writeln("Configured work size is : ", writeWork, " with grid ", writeGrid, " and block ", writeBlock);
+    if (isectFile != "") {
+      writeCSRFile(isectFile, isectCSR); 
+    }
   }
 
   //FIXME: Should the intermediate steps be privatized?
