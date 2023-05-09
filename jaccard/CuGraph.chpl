@@ -9,29 +9,29 @@ module CuGraph {
   //Mix some CUDA and SYCL abstractions
   //For tuples, X=0, Y=1, Z=2
   record nd_item {
-    var global_id : 3*int;
-    var block_id : 3*int;
-    var thread_id : 3*int;
-    var global_dim : 3*int;
-    var grid_dim : 3*int;
-    var block_dim : 3*int;
+    var global_id : 3*int(64);
+    var block_id : 3*int(64);
+    var thread_id : 3*int(64);
+    var global_dim : 3*int(64);
+    var grid_dim : 3*int(64);
+    var block_dim : 3*int(64);
   }
 
   //Just a shorthand to de-linearize the ID
   //For tuples, X=0, Y=1, Z=2
-  proc get_ND_ID(in gridDim : 3*int, in blockDim : 3*int, in linearID : int) : nd_item {
+  proc get_ND_ID(in gridDim : 3*int(64), in blockDim : 3*int(64), in linearID : int(64)) : nd_item {
     var ret : nd_item;
     ret.block_dim = blockDim;
     ret.grid_dim = gridDim;
     ret.global_dim = ((blockDim(0)*gridDim(0)), (blockDim(1)*gridDim(1)), (blockDim(2)*gridDim(2)));
     var inBlockLinear = linearID % (blockDim(0)*blockDim(1)*blockDim(2));
-    var blockLinear = linearID / (blockDim(0)*blockDim(1)*blockDim(2)) : int;
+    var blockLinear = linearID / (blockDim(0)*blockDim(1)*blockDim(2)) : int(64);
     ret.thread_id(0) = inBlockLinear % blockDim(0);
-    ret.thread_id(1) = (inBlockLinear / blockDim(0)) : int % (blockDim(1));
-    ret.thread_id(2) = (inBlockLinear / (blockDim(0) * blockDim(1))) : int;
+    ret.thread_id(1) = (inBlockLinear / blockDim(0)) : int(64) % (blockDim(1));
+    ret.thread_id(2) = (inBlockLinear / (blockDim(0) * blockDim(1))) : int(64);
     ret.block_id(0) = blockLinear % gridDim(0);
-    ret.block_id(1) = (blockLinear / gridDim(0)) : int % (gridDim(1));
-    ret.block_id(2) = (blockLinear / (gridDim(0) * gridDim(1))) : int;
+    ret.block_id(1) = (blockLinear / gridDim(0)) : int(64) % (gridDim(1));
+    ret.block_id(2) = (blockLinear / (gridDim(0) * gridDim(1))) : int(64);
     ret.global_id(0) = ret.thread_id(0) + ret.block_id(0)*blockDim(0);
     ret.global_id(1) = ret.thread_id(1) + ret.block_id(1)*blockDim(1);
     ret.global_id(2) = ret.thread_id(2) + ret.block_id(2)*blockDim(2);
@@ -91,7 +91,7 @@ module CuGraph {
       var isZGrid = min((inGraph.numVerts + isZBlock -1)/isZBlock, MAX_GPU_BLOCKS);
 
       //As of 1.30, only 1D foralls are supported, need to convert 3D->linear->3D threads
-      var workSize = ((isXBlock*isXGrid)*(isYBlock*isYGrid)*(isZBlock*isZGrid));
+      var workSize : int(64) = ((isXBlock*isXGrid)*(isYBlock*isYGrid)*(isZBlock*isZGrid));
       intersect_time.clear();
       intersect_time.start();
       forall linear_id in 0..<workSize {
