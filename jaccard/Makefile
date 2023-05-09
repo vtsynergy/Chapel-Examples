@@ -5,8 +5,9 @@ CC=clang
 CXX=clang++
 
 CHPL_CUDA_PATH=../../tool-installs/cuda-$(HOSTNAME)
-CHPL_BIN_PATH=../../tool-installs/chapel-latest-$(HOSTNAME)/bin
-
+ifeq ($(strip $(CHPL_BIN_PATH)),)
+CHPL_BIN_PATH=../../tool-installs/chapel-latestAoD-$(HOSTNAME)/bin
+endif
 CHPL:= CHPL_CUDA_PATH=$(CHPL_CUDA_PATH) $(CHPL_BIN_PATH)/chpl
 CHPL_FLAGS := $(CHPL_FLAGS) $(CHPL_GPUAPI_MODULES) 
 
