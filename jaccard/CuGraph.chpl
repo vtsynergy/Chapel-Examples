@@ -187,14 +187,7 @@ module CuGraph {
       //JaccardWeights
       weights_time.clear();
       weights_time.start();
-      forall x in weights.domain {
-          assertOnGpu(); //Fail if this can't be GPU-ized
-        //FIXME, could an order qualifer give better performance?
-        var Wi = intersectWeight[x];
-        var Ws = neighborSum[x];
-        var Wu = Ws - Wi;
-        weights[x] = (Wi / Wu);
-      }
+      weights = intersectWeight / (neighborSum - intersectWeight);
       weights_time.stop();
       //Copy arrays out
       //FIXME, once we can coerce on the host, no need to write offsets/indices here
