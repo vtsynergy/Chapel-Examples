@@ -3,44 +3,6 @@ module CuGraph {
   use GPU;
   use Time;
   use CTypes;
-
-  extern {
-    //Credit: Andy Stone @ HPE for this atomic workaround
-    #include <cuda.h>
-    #include <cuda_runtime.h>
-    #include <cuda_runtime_api.h>
-
-    __device__ static inline void fp_atomAdd(float *buf, int idx, float val) {
-      atomicAdd(&buf[idx], val);
-    }
-    __host__ static inline void fp_atomAdd(float *buf, int idx, float val) {}
-
-    __device__ static inline void dp_atomAdd(double *buf, int idx, double val) {
-      atomicAdd(&buf[idx], val);
-    }
-    __host__ static inline void dp_atomAdd(double *buf, int idx, double val) {}
-
-    __device__ static inline void fp_atomAdd_id64(float *buf, int64_t idx, float val) {
-      atomicAdd(&buf[idx], val);
-    }
-    __host__ static inline void fp_atomAdd_id64(float *buf, int64_t idx, float val) {}
-
-    __device__ static inline void dp_atomAdd_id64(double *buf, int64_t idx, double val) {
-      atomicAdd(&buf[idx], val);
-    }
-    __host__ static inline void dp_atomAdd_id64(double *buf, int64_t idx, double val) {}
-  }
-
-  pragma "codegen for GPU"
-  extern "fp_atomAdd" proc ex_atomAdd(buf : c_ptr(c_float), idx : c_int, val : c_float);
-  pragma "codegen for GPU"
-  extern "dp_atomAdd" proc ex_atomAdd(buf : c_ptr(c_double), idx : c_int, val : c_double);
-  pragma "codegen for GPU"
-  extern "fp_atomAdd_id64" proc ex_atomAdd(buf : c_ptr(c_float), idx : c_longlong, val : c_float);
-  pragma "codegen for GPU"
-  extern "dp_atomAdd_id64" proc ex_atomAdd(buf : c_ptr(c_double), idx : c_longlong, val : c_double);
-
-
   param MAX_GPU_BLOCKS=33554432;
 //  param MAX_GPU_BLOCKS=65535;
 
@@ -137,9 +99,6 @@ module CuGraph {
       var isYGrid = 1;
       var isZGrid = min((fullInGraph.numVerts + isZBlock -1)/isZBlock, MAX_GPU_BLOCKS);
 
-      //Atomic workaround needs a c_ptr to the intersection array
-      var c_intersects = c_ptrTo(intersectWeight);
-
       //Yanked from EdgeCentric
       //If you use fullInGraph.numVerts directly in the if statement below, it appears to cancel most of the threads
       var offSize = fullInGraph.numVerts;
@@ -209,7 +168,7 @@ module CuGraph {
 
             //If the element with the same column index in the reference row has been found
             if (match != -1) {
-              ex_atomAdd(c_intersects, j, ref_val);
+              gpuAtomicAdd(intersectWeight[j], ref_val);
             }
           i += tid.global_dim(0);
           } //} //close 'z' forall and 'i' for loops
