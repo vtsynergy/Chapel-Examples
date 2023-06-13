@@ -199,6 +199,30 @@ prototype module CSR {
     }
   }
 
+  // New hierarchical concrete base that only holds descriptor vars
+  class CSR_base {
+    var numEdges : int(64);
+    var numVerts : int(64);
+    var isWeighted : bool;
+    var isZeroIndexed : bool;
+    var isDirected : bool;
+    var hasReverseEdges : bool;
+    var isVertexT64 : bool;
+    var isEdgeT64 : bool;
+    var isWeightT64 : bool;
+  }
+
+  // New parameterized generic subclass that only holds graph arrays
+  class CSR_arrays : CSR_base {
+    //All arrays start with degenerate domains, and are modified at initialization
+    var idxDom : domain(1) = {0..0};
+    var indices : [idxDom] int(?); //either 32 or 64
+    var offDom : domain(1) = {0..0};
+    var offsets : [offDom] int(?); //either 32 or 64
+    var weightDom : domain(1) = {0..0};
+    var weights : [weightDom] real(?); //either 32 or 64
+  }
+
   //Can we make this a generic type to accept both 32- and 64-bit vertices/edges/weights?
   class CSR {
     //TODO Atharva wanted me to confirm this structure can deal with directed graphs for TC, so that we don't have as much redundant work
