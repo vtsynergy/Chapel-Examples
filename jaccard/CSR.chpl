@@ -224,6 +224,31 @@ prototype module CSR {
     param wWidth = 32; //either 32 or 64
     var weightDom : domain(1) = {0..0};
     var weights : [weightDom] real(wWidth);
+
+    operator :(from : ?fromType, type to : this.type) where isSubtype(fromType, CSR(?)) {
+      assert((to.iWidth == (if fromType.isVertexT64 then 64 else 32) &&
+              to.oWidth == (if fromType.isEdgeT64 then 64 else 32) &&
+              to.wWidth == (if fromType.isWeightT64 then 64 else 32)),
+             "Cannot cast between!\nfromType: ", fromType : string, "\ntoType: ", to : string);
+      var tmp = new to(
+        numEdges = from.numEdges,
+        numVerts = from.numVerts,
+        isWeighted = from.isWeighted,
+        isZeroIndexed = from.isZeroIndexed,
+        isDirected = from.isDirected,
+        hasReverseEdges = from.hasReverseEdges,
+        isVertexT64 = from.isVertexT64,
+        isEdgeT64 = from.isEdgeT64,
+        isWeightT64 = from.isWeightT64,
+        idxDom = from.idxDom,
+        indices = from.indices,
+        offDom = from.offDom,
+        offsets = from.offsets,
+        weightDom = from.weightDom,
+        weights = from.weights
+      );
+      return tmp;
+    }
   }
 
   //Can we make this a generic type to accept both 32- and 64-bit vertices/edges/weights?
