@@ -270,6 +270,27 @@ prototype module CSR {
     var weightDom : domain(1) = {0..(if isWeighted then numEdges-1 else 0)}; //Degenerate if we don't have weights
     var weights : [weightDom] real(if isWeightT64 then 64 else 32);
 
+    operator :(from : ?fromType, type to : this.type) where isSubtype(fromType, CSR_arrays(?)) {
+      assert((to.isVertexT64 == (fromType.iWidth == 64) &&
+              to.isEdgeT64 == (fromType.oWidth == 64) &&
+              to.isWeightT64 == (fromType.wWidth == 64)),
+             "Cannot cast between!\nfromType: ", fromType : string, "\ntoType: ", to : string);
+      var tmp = new to(
+        numEdges = from.numEdges,
+        numVerts = from.numVerts,
+        isZeroIndexed = from.isZeroIndexed,
+        isDirected = from.isDirected,
+        hasReverseEdges = from.hasReverseEdges,
+        idxDom = from.idxDom,
+        indices = from.indices,
+        offDom = from.offDom,
+        offsets = from.offsets,
+        weightDom = from.weightDom,
+        weights = from.weights
+      );
+      return tmp;
+    }
+
     proc getDescriptor() : CSR_descriptor {
       var ret : CSR_descriptor;
       ret.isWeighted = this.isWeighted;
