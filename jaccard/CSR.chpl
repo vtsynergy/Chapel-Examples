@@ -317,6 +317,15 @@ prototype module CSR {
     }
   }
 
+proc NewCSRArrays(type CSR_type : CSR_arrays(?), in base : CSR_base): CSR_base {
+  assert(( CSR_type.iWidth == (if base.isVertexT64 then 64 else 32) &&
+           CSR_type.oWidth == (if base.isEdgeT64 then 64 else 32) &&
+           CSR_type.wWidth == (if base.isWeightT64 then 64 else 32)
+         ),
+        "Cannot create new CSR_arrays, type mismatched with CSR_base!\nType: ", CSR_type : string, "\nCSR_base: ", base : string);
+  var retCSR = new unmanaged CSR_type(idxDom = {0..<base.numEdges}, offDom = {0..base.numVerts}, weightDom = {0..<(if base.isWeighted then base.numEdges else 0)});
+  return retCSR;
+}
 
 proc NewCSRHandle(type CSR_type : CSR(?), in desc : CSR_descriptor): CSR_handle {
   assert(( CSR_type.isWeighted == desc.isWeighted &&
