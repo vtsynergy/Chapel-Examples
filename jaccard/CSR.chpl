@@ -201,15 +201,15 @@ prototype module CSR {
 
   // New hierarchical concrete base that only holds descriptor vars
   class CSR_base {
-    var numEdges : int(64);
-    var numVerts : int(64);
-    var isWeighted : bool;
-    var isZeroIndexed : bool;
-    var isDirected : bool;
-    var hasReverseEdges : bool;
-    var isVertexT64 : bool;
-    var isEdgeT64 : bool;
-    var isWeightT64 : bool;
+    var numEdges : int(64) = 0;
+    var numVerts : int(64) = 0;
+    var isWeighted : bool = false;
+    var isZeroIndexed : bool = false;
+    var isDirected : bool = false;
+    var hasReverseEdges : bool = false;
+    var isVertexT64 : bool = false;
+    var isEdgeT64 : bool = false;
+    var isWeightT64 : bool = false;
   }
 
   // New parameterized generic subclass that only holds graph arrays
