@@ -215,12 +215,15 @@ prototype module CSR {
   // New parameterized generic subclass that only holds graph arrays
   class CSR_arrays : CSR_base {
     //All arrays start with degenerate domains, and are modified at initialization
+    param iWidth = 32; //either 32 or 64
     var idxDom : domain(1) = {0..0};
-    var indices : [idxDom] int(?); //either 32 or 64
+    var indices : [idxDom] int(iWidth);
+    param oWidth = 32; //either 32 or 64
     var offDom : domain(1) = {0..0};
-    var offsets : [offDom] int(?); //either 32 or 64
+    var offsets : [offDom] int(oWidth);
+    param wWidth = 32; //either 32 or 64
     var weightDom : domain(1) = {0..0};
-    var weights : [weightDom] real(?); //either 32 or 64
+    var weights : [weightDom] real(wWidth);
   }
 
   //Can we make this a generic type to accept both 32- and 64-bit vertices/edges/weights?
