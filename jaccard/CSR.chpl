@@ -350,8 +350,22 @@ proc NewCSRHandle(type CSR_type : CSR(?), in desc : CSR_descriptor): CSR_handle 
   return retHandle;
 }
 
+//This is what I'd like to be able to say
+/*proc MakeCSR(in base : CSR_base) : CSR_base {
+  return NewCSRArrays(CSR_arrays(iWidth=(if base.isVertexT64 then 64 else 32), oWidth=(if base.isEdgeT64 then 64 else 32), wWidth=(if base.isWeightT64 then 64 else 32)), base);
+}*/
+//This is how I currently have to say it
 //This ladder lets us take the runtime booleans and translate them into a call
 // to the right compile-time instantiation of the CSR type
+private proc MakeCSR(in base : CSR_base, param iWidth : int, param oWidth : int) : CSR_base {
+  return (if base.isWeightT64 then NewCSRArrays(CSR_arrays(iWidth, oWidth, 64), base) else NewCSRArrays(CSR_arrays(iWidth, oWidth, 32), base));
+}
+private proc MakeCSR(in base : CSR_base, param iWidth : int) : CSR_base {
+  return (if base.isEdgeT64 then MakeCSR(base, iWidth, 64) else MakeCSR(base, iWidth, 32));
+}
+proc MakeCSR(in base : CSR_base) : CSR_base {
+  return (if base.isVertexT64 then MakeCSR(base, 64) else MakeCSR(base, 32));
+}
 //We then pass the opaque handle up to be passed around by the functions that
 // don't really need to know the internals of the type
 private proc MakeCSR(in desc : CSR_descriptor, param isWeighted : bool, param isVertexT64 : bool, param isEdgeT64 : bool, param isWeightT64 : bool) :CSR_handle {
