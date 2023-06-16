@@ -210,6 +210,20 @@ prototype module CSR {
     var isVertexT64 : bool = false;
     var isEdgeT64 : bool = false;
     var isWeightT64 : bool = false;
+
+    operator :(from : CSR_descriptor, type to : this.type) {
+      return new to(
+        numEdges = from.numEdges,
+        numVerts = from.numVerts,
+        isWeighted = from.isWeighted,
+        isZeroIndexed = from.isZeroIndexed,
+        isDirected = from.isDirected,
+        hasReverseEdges = from.hasReverseEdges,
+        isVertexT64 = from.isVertexT64,
+        isEdgeT64 = from.isEdgeT64,
+        isWeightT64 = from.isWeightT64
+      );
+    }
   }
 
   // New parameterized generic subclass that only holds graph arrays
