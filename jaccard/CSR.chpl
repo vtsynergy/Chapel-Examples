@@ -395,8 +395,10 @@ proc NewCSRHandle(type CSR_type : CSR(?), in desc : CSR_descriptor): CSR_handle 
            "Cannot create new CSR handle, type mismatched with descriptor!\nType: ", CSR_type : string, "\nDescriptor: ", desc : string);
   var retHandle : CSR_handle;
   local { // Right now the GPU implementation uses "wide" pointers everywhere, "local" forces a version that doesn't trip up on node-locality assertions for now
-    //FIXME add an "initialize from descriptor" procedure
-    var retCSR = new unmanaged CSR_type(desc.numEdges, desc.numVerts);
+    type retType = CSR_arrays((if CSR_type.isVertexT64 then 64 else 32), (if CSR_type.isEdgeT64 then 64 else 32), (if CSR_type.isWeightT64 then 64 else 32));
+    var retArrays = (NewCSRArrays(retType, (desc : CSR_base)) : retType);
+    var retCSR = (retArrays : unmanaged CSR_type);
+    delete retArrays;
     //Assign all the non-param, non-array fields
     retCSR.isZeroIndexed = desc.isZeroIndexed;
     retCSR.isDirected = desc.isDirected;
