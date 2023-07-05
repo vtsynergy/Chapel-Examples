@@ -28,6 +28,8 @@ module Jaccard {
     var outCSR = MakeCSR(outDesc);
     //Launch the selected kernel pipeline
     if (useCUGraph) {
+      //TODO call the new CSR_base-based function, but first we need a "deepcast" operator to turn a CSR_handle into a "CSR_base" containing a real CSR_arrays (without this function needing to know the details)
+      var inBase = deepCastToBase(inCSR);
       CuGraph.jaccard(inCSR, outCSR);
     } else {
       EdgeCentric.jaccard(inCSR, outCSR);

@@ -539,4 +539,27 @@ proc writeCSRFile(in outFile : string, in handle : CSR_handle) {
   //TODO anything to gracefully close the channel/file?
 }
 
+private proc deepCastToBase(in handle : CSR_handle, param isVertexT64 : bool, param isEdgeT64 : bool, param isWeightT64 : bool, param isWeighted : bool) : CSR_base {
+  type retType = CSR_arrays((if isVertexT64 then 64 else 32), (if isEdgeT64 then 64 else 32), (if isWeightT64 then 64 else 32));
+  var retArrays = (NewCSRArrays(retType, (handle.desc : CSR_base)) : retType);
+  local { // Right now the GPU implementation uses "wide" pointers everywhere, "local" forces a version that doesn't trip up on node-locality assertions for now
+    var copyCSR = ReinterpretCSRHandle(unmanaged CSR(isWeighted, isVertexT64, isEdgeT64, isWeightT64), handle);
+    retArrays = (copyCSR : retType);
+  }
+  return retArrays;
+}
+private proc deepCastToBase(in handle : CSR_handle, param isVertexT64 : bool, param isEdgeT64 : bool, param isWeightT64 : bool) : CSR_base {
+  return (if (handle.desc.isWeighted) then deepCastToBase(handle, isVertexT64, isEdgeT64, isWeightT64, true) else deepCastToBase(handle, isVertexT64, isEdgeT64, isWeightT64, false));
+}
+private proc deepCastToBase(in handle : CSR_handle, param isVertexT64 : bool, param isEdgeT64 : bool) : CSR_base {
+  return (if (handle.desc.isWeightT64) then deepCastToBase(handle, isVertexT64, isEdgeT64, true) else deepCastToBase(handle, isVertexT64, isEdgeT64, false));
+}
+private proc deepCastToBase(in handle : CSR_handle, param isVertexT64 : bool) : CSR_base {
+  return (if (handle.desc.isEdgeT64) then deepCastToBase(handle, isVertexT64, true) else deepCastToBase(handle, isVertexT64, false));
+}
+//THIS WILL CREATE A COPY
+proc deepCastToBase(in handle : CSR_handle) : CSR_base {
+  return (if (handle.desc.isVertexT64) then deepCastToBase(handle, true) else deepCastToBase(handle, false));
+}
+
 }
