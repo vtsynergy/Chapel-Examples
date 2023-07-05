@@ -76,16 +76,13 @@ module CuGraph {
     return ret;
   }
   config var isectFile = "" : string;
-  proc VC_Jaccard(type inType : unmanaged CSR, in inGraph : inType, type outType : unmanaged CSR(isWeighted = true), ref outGraph : outType) {
+  proc VC_Jaccard(type csr_type : unmanaged CSR_arrays, in inGraph : csr_type, ref outGraph : csr_type, param isWeighted : bool) {
     //Do stuff
     writeln("Vertex Centric");
-    assert(!inType.isWeighted, "Vertex-centric weighted input support not yet implemented");
+    assert(!isWeighted, "Vertex-centric weighted input support not yet implemented");
 
     //Debug intersections
-    var isectCSR : CSR_handle;
-    if (isectFile != "") { 
-      isectCSR = MakeCSR(outGraph.getDescriptor());
-    }
+    var isectCSR : csr_type = outGraph;
 
     //Kernels happen here
     //This is a trivial that just writes the thread ID for each edge
@@ -114,7 +111,7 @@ module CuGraph {
       forall x in partialSum.domain {
         var start = offsets[x];
         var end = offsets[x+1];
-        if (inType.isWeighted) {
+        if (isWeighted) {
           assert(false, "Weighted RowSum not yet implemented");
         } else {
           assertOnGpu(); //Fail if this can't be GPU-ized
@@ -183,7 +180,7 @@ module CuGraph {
             var match = -1 : outGraph.indices.eltType;
             var ref_col = indices[i];
             var ref_val : outGraph.weights.eltType;
-            if (inGraph.isWeighted) {
+            if (isWeighted) {
               assert(false, "Weighted VC Intersectoin not yet implemented");
               //TODO ref_val = inGraph.weights[ref_col];
             } else {
@@ -219,10 +216,9 @@ module CuGraph {
       intersect_time.stop();
 
       if (isectFile != "") { 
-        var tempIsectCSR = ReinterpretCSRHandle(outType, isectCSR);
-        tempIsectCSR.offsets = offsets;
-        tempIsectCSR.indices = indices;
-        tempIsectCSR.weights = intersectWeight;
+        isectCSR.offsets = offsets;
+        isectCSR.indices = indices;
+        isectCSR.weights = intersectWeight;
       }
       
       //JaccardWeights
@@ -251,28 +247,50 @@ module CuGraph {
     writeln("VC_GPU_Region Elapsed (s): ", gpu_region_time.elapsed());
     writeln("Configured work size is : ", writeWork, " with grid ", writeGrid, " and block ", writeBlock);
     if (isectFile != "") {
-      writeCSRFile(isectFile, isectCSR); 
+      var tempIsectCSR = MakeCSR((isectCSR : CSR(isWeighted = true, isVertexT64 = (isectCSR.iWidth == 64), isEdgeT64 = (isectCSR.oWidth == 64), isWeightT64 = (isectCSR.wWidth == 64))).getDescriptor()); //TODO cast a CSR_base into a descriptor to make a CSR_handle so we can write it
+      writeCSRFile(isectFile, tempIsectCSR);
     }
   }
 
   //FIXME: Should the intermediate steps be privatized?
-  proc jaccard(in inCSR : CSR_handle, in outCSR : CSR_handle, param isVertexT64 : bool, param isEdgeT64 : bool, param isWeightT64 : bool) {
+  proc jaccard(in inCSR : CSR_handle, ref outCSR : CSR_handle, param isVertexT64 : bool, param isEdgeT64 : bool, param isWeightT64 : bool) {
     //We only use inCSR here because outCSR is guaranteed to be weighted. inCSR may or may not be
+    type arrType = CSR_arrays((if isVertexT64 then 64 else 32), (if isEdgeT64 then 64 else 32), (if isWeightT64 then 64 else 32));
+    var inArr : unmanaged arrType;
+    var outArr : unmanaged arrType;
     if (inCSR.desc.isWeighted) {
       //Recast both and call VC_Jaccard
       var inCSRInstance = ReinterpretCSRHandle(unmanaged CSR(isWeighted = true, isVertexT64, isEdgeT64, isWeightT64), inCSR);
       var outCSRInstance = ReinterpretCSRHandle(unmanaged CSR(isWeighted = true, isVertexT64, isEdgeT64, isWeightT64), outCSR);
-      VC_Jaccard(inCSRInstance.type, inCSRInstance, outCSRInstance.type, outCSRInstance);
+      inArr = (inCSRInstance : arrType);
+      outArr = (outCSRInstance : arrType);
+      delete outCSRInstance;
+      var newOutCSRInstance : outCSRInstance.type;
+      VC_Jaccard(unmanaged arrType, inArr, outArr, true);
+      newOutCSRInstance = (outArr : outCSRInstance.type);
+      delete outArr;
+      outCSR.data = (newOutCSRInstance : c_void_ptr);
+      writeln(newOutCSRInstance);
+      writeln(outCSR.data);
     } else {
       //Recast both and call VC_Jaccard
       var inCSRInstance = ReinterpretCSRHandle(unmanaged CSR(isWeighted = false, isVertexT64, isEdgeT64, isWeightT64), inCSR);
       //This will always be true to store the weights
       var outCSRInstance = ReinterpretCSRHandle(unmanaged CSR(isWeighted = true, isVertexT64, isEdgeT64, isWeightT64), outCSR);
-      VC_Jaccard(inCSRInstance.type, inCSRInstance, outCSRInstance.type, outCSRInstance);
+      inArr = (inCSRInstance : arrType);
+      outArr = (outCSRInstance : arrType);
+      delete outCSRInstance;
+      var newOutCSRInstance : outCSRInstance.type;
+      VC_Jaccard(unmanaged arrType, inArr, outArr, false);
+      newOutCSRInstance = (outArr : outCSRInstance.type);
+      delete outArr;
+      outCSR.data = (newOutCSRInstance : c_void_ptr);
+      writeln(newOutCSRInstance);
+      writeln(outCSR.data);
     }
   }
 
-  proc jaccard(in inCSR : CSR_handle, in outCSR : CSR_handle, param isVertexT64 : bool, param isEdgeT64 : bool) {
+  proc jaccard(in inCSR : CSR_handle, ref outCSR : CSR_handle, param isVertexT64 : bool, param isEdgeT64 : bool) {
     if (outCSR.desc.isWeightT64) {
       jaccard(inCSR, outCSR, isVertexT64, isEdgeT64, false);
     } else {
@@ -280,7 +298,7 @@ module CuGraph {
     }
   }
 
-  proc jaccard(in inCSR : CSR_handle, in outCSR : CSR_handle, param isVertexT64 : bool) {
+  proc jaccard(in inCSR : CSR_handle, ref outCSR : CSR_handle, param isVertexT64 : bool) {
     if (outCSR.desc.isEdgeT64) {
       jaccard(inCSR, outCSR, isVertexT64, false);
     } else {
@@ -289,7 +307,7 @@ module CuGraph {
   }
 
   //This is the entrypoint, the user shouldn't need to interact with the intermediate steps of the ladder
-  proc jaccard(in inCSR : CSR_handle, in outCSR : CSR_handle) {
+  proc jaccard(in inCSR : CSR_handle, ref outCSR : CSR_handle) {
     //TODO If the input format doesn't match the output, coerce it immediately and then use that instead
     //We compute in output-native format
     if (outCSR.desc.isVertexT64) {
