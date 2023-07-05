@@ -76,13 +76,16 @@ module CuGraph {
     return ret;
   }
   config var isectFile = "" : string;
-  proc VC_Jaccard(type csr_type : unmanaged CSR_arrays, in inGraph : csr_type, ref outGraph : csr_type, param isWeighted : bool) {
+  proc VC_Jaccard(type csr_type : unmanaged CSR_arrays, in inGraph : CSR_base, inout outGraph : CSR_base, param isWeighted : bool) {
     //Do stuff
     writeln("Vertex Centric");
     assert(!isWeighted, "Vertex-centric weighted input support not yet implemented");
 
+    var fullInGraph = try! (inGraph : csr_type);
+    var fullOutGraph = try! (outGraph : csr_type);
+
     //Debug intersections
-    var isectCSR : csr_type = outGraph;
+    var isectCSR : csr_type = fullOutGraph;
 
     //Kernels happen here
     //This is a trivial that just writes the thread ID for each edge
@@ -98,14 +101,14 @@ module CuGraph {
     gpu_region_time.start();
     on here.gpus[0] {
       //Declare device arrays, using element-types and sizes from the CSR objects for convenience
-      var offsets: [outGraph.offDom] outGraph.offsets.eltType;
-      var indices: [outGraph.idxDom] outGraph.indices.eltType;
-      var weights: [outGraph.weightDom] outGraph.weights.eltType;
+      var offsets: [fullOutGraph.offDom] fullOutGraph.offsets.eltType;
+      var indices: [fullOutGraph.idxDom] fullOutGraph.indices.eltType;
+      var weights: [fullOutGraph.weightDom] fullOutGraph.weights.eltType;
       //Copy data to device arrays
-      offsets = inGraph.offsets;
-      indices = inGraph.indices;
+      offsets = fullInGraph.offsets;
+      indices = fullInGraph.indices;
       //RowSum
-      var partialSum: [offsets.domain.interior(-inGraph.numVerts)] outGraph.weights.eltType; //We only want the first numVerts elements starting at 0 (not the element at numVerts)
+      var partialSum: [offsets.domain.interior(-fullInGraph.numVerts)] fullOutGraph.weights.eltType; //We only want the first numVerts elements starting at 0 (not the element at numVerts)
       rowsum_time.clear();
       rowsum_time.start();
       forall x in partialSum.domain {
@@ -120,11 +123,11 @@ module CuGraph {
       }
       rowsum_time.stop();
       //Fill is trivial
-      var intersectWeight: [outGraph.weightDom] outGraph.weights.eltType;
-      var neighborSum: [outGraph.weightDom] outGraph.weights.eltType;
+      var intersectWeight: [fullOutGraph.weightDom] fullOutGraph.weights.eltType;
+      var neighborSum: [fullOutGraph.weightDom] fullOutGraph.weights.eltType;
       fill_time.clear();
       fill_time.start();
-      intersectWeight = 0.0 : outGraph.weights.eltType;
+      intersectWeight = 0.0 : fullOutGraph.weights.eltType;
       fill_time.stop();
       //Intersection
       param isYBlock = 4;
@@ -132,14 +135,14 @@ module CuGraph {
       param isZBlock = 8;
       var isXGrid = 1;
       var isYGrid = 1;
-      var isZGrid = min((inGraph.numVerts + isZBlock -1)/isZBlock, MAX_GPU_BLOCKS);
+      var isZGrid = min((fullInGraph.numVerts + isZBlock -1)/isZBlock, MAX_GPU_BLOCKS);
 
       //Atomic workaround needs a c_ptr to the intersection array
       var c_intersects = c_ptrTo(intersectWeight);
 
       //Yanked from EdgeCentric
-      //If you use inGraph.numVerts directly in the if statement below, it appears to cancel most of the threads
-      var offSize = inGraph.numVerts;
+      //If you use fullInGraph.numVerts directly in the if statement below, it appears to cancel most of the threads
+      var offSize = fullInGraph.numVerts;
 
       //As of 1.30, only 1D foralls are supported, need to convert 3D->linear->3D threads
       var workSize : int(64) = ((isXBlock*isXGrid)*(isYBlock*isYGrid)*(isZBlock*isZGrid));
@@ -153,14 +156,15 @@ module CuGraph {
       //Each of these double-loop lines is using the forall to define the CUDA grid/block dimensions, and the for to do the corresponding intra-thread loop
       //forall z in 0..<isZGrid*isZBlock {
       //Since by clauses are breaking GPU-ization in 1.30, replace with whiles
-      var row = tid.global_id(2) : outGraph.offsets.eltType;
+      type idxType = int (if (fullOutGraph.iWidth == 64 || fullOutGraph.oWidth == 64) then 64 else 32);
+      var row = tid.global_id(2) : idxType;
       while (row < offSize) {
-      //for row in (tid.global_id(2))..<inGraph.numVerts by tid.global_dim(2) {//Rows/Z
+      //for row in (tid.global_id(2))..<fullInGraph.numVerts by tid.global_dim(2) {//Rows/Z
         //forall y in 0..<isYGrid*isYBlock {
         var j = offsets[row]+tid.global_id(1);
         while (j < offsets[row+1]) {
         //for j in (offsets[row]+tid.global_id(1))..<offsets[row+1] by tid.global_dim(1) {  //offsets[row..row+1]/Y
-          var col = indices[j];
+          var col : idxType = indices[j];
           // find which row has least elements (and call it reference row)
           var Ni = offsets[row+1] - offsets[row];
           var Nj = offsets[col+1] - offsets[col];
@@ -177,12 +181,12 @@ module CuGraph {
           while (i < offsets[refer+1]) {
           //for i in (offsets[refer]+tid.global_id(0))..<offsets[refer+1] by tid.global_dim(0) { // offsets[ref..ref+1] / Z
             assertOnGpu(); //Fail if this can't be GPU-ized
-            var match = -1 : outGraph.indices.eltType;
+            var match = -1 : idxType;
             var ref_col = indices[i];
-            var ref_val : outGraph.weights.eltType;
+            var ref_val : fullOutGraph.weights.eltType;
             if (isWeighted) {
               assert(false, "Weighted VC Intersectoin not yet implemented");
-              //TODO ref_val = inGraph.weights[ref_col];
+              //TODO ref_val = fullInGraph.weights[ref_col];
             } else {
               ref_val = 1.0;
             }
@@ -211,7 +215,7 @@ module CuGraph {
           } //} //close 'z' forall and 'i' for loops
         j += tid.global_dim(1);
         } //} //close 'y' forall and 'j' for loops
-      row += tid.global_dim(2) : outGraph.offsets.eltType;
+      row += tid.global_dim(2) : fullOutGraph.offsets.eltType;
       } } //close 'z' forall and 'row' for loops
       intersect_time.stop();
 
@@ -235,9 +239,9 @@ module CuGraph {
       weights_time.stop();
       //Copy arrays out
       //FIXME, once we can coerce on the host, no need to write offsets/indices here
-      outGraph.offsets = offsets;
-      outGraph.indices = indices;
-      outGraph.weights = weights;
+      fullOutGraph.offsets = offsets;
+      fullOutGraph.indices = indices;
+      fullOutGraph.weights = weights;
     }
     gpu_region_time.stop();
     writeln("VC_RowSum Elapsed (s): ", rowsum_time.elapsed());
@@ -249,6 +253,36 @@ module CuGraph {
     if (isectFile != "") {
       var tempIsectCSR = MakeCSR((isectCSR : CSR(isWeighted = true, isVertexT64 = (isectCSR.iWidth == 64), isEdgeT64 = (isectCSR.oWidth == 64), isWeightT64 = (isectCSR.wWidth == 64))).getDescriptor()); //TODO cast a CSR_base into a descriptor to make a CSR_handle so we can write it
       writeCSRFile(isectFile, tempIsectCSR);
+    }
+  }
+
+  private proc jaccard(in inGraph : CSR_base, inout outGraph : CSR_base, param iWidth : int, param oWidth : int, param wWidth : int) {
+    type arrType = unmanaged CSR_arrays(iWidth, oWidth, wWidth);
+    if (inGraph.isWeighted) {
+      VC_Jaccard(arrType, inGraph, outGraph, true);
+    } else {
+      VC_Jaccard(arrType, inGraph, outGraph, false);
+    }
+  }
+  private proc jaccard(in inGraph : CSR_base, inout outGraph : CSR_base, param iWidth : int, param oWidth : int) {
+    if (inGraph.isWeightT64) {
+      jaccard(inGraph, outGraph, iWidth, oWidth, 64);
+    } else {
+      jaccard(inGraph, outGraph, iWidth, oWidth, 32);
+    }
+  }
+  private proc jaccard(in inGraph : CSR_base, inout outGraph : CSR_base, param iWidth : int) {
+    if (inGraph.isEdgeT64) {
+      jaccard(inGraph, outGraph, iWidth, 64);
+    } else {
+      jaccard(inGraph, outGraph, iWidth, 32);
+    }
+  }
+  proc jaccard(in inGraph : unmanaged CSR_base, inout outGraph : unmanaged CSR_base) {
+    if (inGraph.isVertexT64) {
+      jaccard(inGraph, outGraph, 64);
+    } else {
+      jaccard(inGraph, outGraph, 32);
     }
   }
 
@@ -266,7 +300,8 @@ module CuGraph {
       outArr = (outCSRInstance : arrType);
       delete outCSRInstance;
       var newOutCSRInstance : outCSRInstance.type;
-      VC_Jaccard(unmanaged arrType, inArr, outArr, true);
+      var tmpOutBase = outArr : CSR_base;
+      jaccard(inArr, tmpOutBase);
       newOutCSRInstance = (outArr : outCSRInstance.type);
       delete outArr;
       outCSR.data = (newOutCSRInstance : c_void_ptr);
@@ -281,7 +316,8 @@ module CuGraph {
       outArr = (outCSRInstance : arrType);
       delete outCSRInstance;
       var newOutCSRInstance : outCSRInstance.type;
-      VC_Jaccard(unmanaged arrType, inArr, outArr, false);
+      var tmpOutBase = outArr : CSR_base;
+      jaccard(inArr, tmpOutBase);
       newOutCSRInstance = (outArr : outCSRInstance.type);
       delete outArr;
       outCSR.data = (newOutCSRInstance : c_void_ptr);
