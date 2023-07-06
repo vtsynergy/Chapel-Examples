@@ -552,6 +552,32 @@ proc writeCSRFile(in outFile : string, in handle : CSR_handle) {
   //TODO anything to gracefully close the channel/file?
 }
 
+private proc deepCastToHandle(in base : CSR_base, param isVertexT64 : bool, param isEdgeT64 : bool, param isWeightT64 : bool, param isWeighted : bool) : CSR_handle {
+  type retType = CSR(isVertexT64 = isVertexT64, isEdgeT64 = isEdgeT64, isWeightT64 = isWeightT64, isWeighted = isWeighted);
+  var retCSR : CSR_handle;
+  local {
+    retCSR = MakeCSR(base : CSR_descriptor);
+    var fullCSR = ReinterpretCSRHandle(unmanaged retType, retCSR);
+    fullCSR = ((base : CSR_arrays(if isVertexT64 then 64 else 32, if isEdgeT64 then 64 else 32, if isWeightT64 then 64 else 32)) : retType);
+    retCSR.data = (fullCSR : c_void_ptr);
+    writeln("Full CSR: ", fullCSR);
+  }
+  return retCSR;
+}
+private proc deepCastToHandle(in base : CSR_base, param isVertexT64 : bool, param isEdgeT64 : bool, param isWeightT64 : bool) : CSR_handle {
+  return (if (base.isWeighted) then deepCastToHandle(base, isVertexT64, isEdgeT64, isWeightT64, true) else deepCastToHandle(base, isVertexT64, isEdgeT64, isWeightT64, false));
+}
+private proc deepCastToHandle(in base : CSR_base, param isVertexT64 : bool, param isEdgeT64 : bool) : CSR_handle {
+  return (if (base.isWeightT64) then deepCastToHandle(base, isVertexT64, isEdgeT64, true) else deepCastToHandle(base, isVertexT64, isEdgeT64, false));
+}
+private proc deepCastToHandle(in base : CSR_base, param isVertexT64 : bool) : CSR_handle {
+  return (if (base.isEdgeT64) then deepCastToHandle(base, isVertexT64, true) else deepCastToHandle(base, isVertexT64, false));
+}
+//THIS WILL CREATE A COPY
+proc deepCastToHandle(in base : CSR_base) : CSR_handle {
+  return (if (base.isVertexT64) then deepCastToHandle(base, true) else deepCastToHandle(base, false));
+}
+
 private proc deepCastToBase(in handle : CSR_handle, param isVertexT64 : bool, param isEdgeT64 : bool, param isWeightT64 : bool, param isWeighted : bool) : CSR_base {
   type retType = CSR_arrays((if isVertexT64 then 64 else 32), (if isEdgeT64 then 64 else 32), (if isWeightT64 then 64 else 32));
   var retArrays = (NewCSRArrays(retType, (handle.desc : CSR_base)) : retType);
