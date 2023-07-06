@@ -22,9 +22,12 @@ module EdgeCentric {
   use GPU;
   use Time;
 
-  proc EC_Jaccard(type inType : unmanaged CSR, in inGraph : inType, type outType : unmanaged CSR(isWeighted = true), ref outGraph : outType) {
+  proc EC_Jaccard(type csr_type : unmanaged CSR_arrays, in inGraph : CSR_base, inout outGraph : CSR_base, param isWeighted : bool) {
     writeln("Edge Centric");
-    assert(!inType.isWeighted, "Edge-centric does not support weighted input graphs");
+    assert(!isWeighted, "Edge-centric does not support weighted input graphs");
+
+    var fullInGraph = try! (inGraph : csr_type);
+    var fullOutGraph = try! (outGraph : csr_type);
     
     //Kernels happen here
     //This is a trivial that just writes the thread ID for each edge. Should be easy to convert to EC_scan
@@ -36,20 +39,20 @@ module EdgeCentric {
     gpu_region_time.start();
     on here.gpus[0] {
       //Declare device arrays, using element-types and sizes from the CSR objects for convenience
-      var offsets: [outGraph.offDom] outGraph.offsets.eltType;
-      var indices: [outGraph.idxDom] outGraph.indices.eltType;
-	  var dests: [outGraph.idxDom] outGraph.indices.eltType;
-      var weights: [outGraph.weightDom] outGraph.weights.eltType;
-	  var jaccards: [outGraph.weightDom] outGraph.weights.eltType;
-	  var trusses: [outGraph.idxDom] outGraph.indices.eltType;
-	  var triangles: [outGraph.idxDom] outGraph.indices.eltType;
+      var offsets: [fullOutGraph.offDom] fullOutGraph.offsets.eltType;
+      var indices: [fullOutGraph.idxDom] fullOutGraph.indices.eltType;
+	  var dests: [fullOutGraph.idxDom] fullOutGraph.indices.eltType;
+      var weights: [fullOutGraph.weightDom] fullOutGraph.weights.eltType;
+	  var jaccards: [fullOutGraph.weightDom] fullOutGraph.weights.eltType;
+	  var trusses: [fullOutGraph.idxDom] fullOutGraph.indices.eltType;
+	  var triangles: [fullOutGraph.idxDom] fullOutGraph.indices.eltType;
       //Copy data to device arrays
-      offsets = inGraph.offsets;
-      indices = inGraph.indices;
+      offsets = fullInGraph.offsets;
+      indices = fullInGraph.indices;
       //Do the kernel computation
       //This needs to be copied out of the `unmanaged CSR` instance to be usable in 1.29
-      //If you use inGraph.numVerts directly in the if statement below, it appears to cancel most of the threads
-      var offSize = inGraph.numVerts;
+      //If you use fullInGraph.numVerts directly in the if statement below, it appears to cancel most of the threads
+      var offSize = fullInGraph.numVerts;
           scan_time.clear();
           scan_time.start();
           //Scan
@@ -59,8 +62,8 @@ module EdgeCentric {
 		if (i>=0) && (i<=offSize){
 		for j in offsets[i]..(offsets[i+1]-1)
 		{
-		 dests[j] = i:outGraph.indices.eltType; ; 
-			//weights[i] = i : outGraph.weights.eltType; //The domain index space is probably integral, convert to whatever real(?) that weights needs to be
+		 dests[j] = i:fullOutGraph.indices.eltType; ; 
+			//weights[i] = i : fullOutGraph.weights.eltType; //The domain index space is probably integral, convert to whatever real(?) that weights needs to be
         }
 		}
 	  }
@@ -71,6 +74,7 @@ module EdgeCentric {
 	  //vertex_t ref, cur, ref_col, cur_col;
 		
 	 
+          type idxType = int (if (fullOutGraph.iWidth == 64 || fullOutGraph.oWidth == 64) then 64 else 32);
 	  //perform JS computations
           //Intersection
           intersect_time.clear();
@@ -78,18 +82,18 @@ module EdgeCentric {
 	  forall i in indices.domain {
 		assertOnGpu(); //Fail if this can't be GPU-ized
 		
-		var Ni : outGraph.indices.eltType; 
-	    var Nj : outGraph.indices.eltType; 
-	    var left : outGraph.indices.eltType; 
-	    var right : outGraph.indices.eltType;  
-	    var middle : outGraph.indices.eltType; 
+		var Ni : idxType; 
+	    var Nj : idxType; 
+	    var left : idxType; 
+	    var right : idxType;  
+	    var middle : idxType; 
 		
-	    var row : outGraph.offsets.eltType; 
-	    var col : outGraph.offsets.eltType; 
-	    var refs : outGraph.offsets.eltType; 
-	    var cur : outGraph.offsets.eltType;
-	    var ref_col : outGraph.offsets.eltType;
-	    var cur_col : outGraph.offsets.eltType;
+	    var row : idxType; 
+	    var col : idxType; 
+	    var refs : idxType; 
+	    var cur : idxType;
+	    var ref_col : idxType;
+	    var cur_col : idxType;
 		//edge_t tid, i,  Ni, Nj, left, right, middle;
 		//vertex_t row, col;
 		//vertex_t ref, cur, ref_col, cur_col;
@@ -134,8 +138,8 @@ module EdgeCentric {
 		
 		
 		
-	 //var trusses: [outGraph.offDom] outGraph.offsets.eltType;
-	 // var triangles: [outGraph.offDom] outGraph.offsets.eltType;
+	 //var trusses: [fullOutGraph.offDom] fullOutGraph.offsets.eltType;
+	 // var triangles: [fullOutGraph.offDom] fullOutGraph.offsets.eltType;
          // seperate kernel for the weights[tid]= weight_j[tid]/((weight_t)(Ni+Nj)-weight_j[tid]);
 	  }
           intersect_time.stop();
@@ -145,17 +149,17 @@ module EdgeCentric {
           weights_time.start();
 	  forall i in indices.domain {
 		assertOnGpu(); //Fail if this can't be GPU-ized
-		var Ni : outGraph.indices.eltType; 
-	    var Nj : outGraph.indices.eltType; 
+		var Ni : idxType; 
+	    var Nj : idxType; 
 	    
-	    var row : outGraph.offsets.eltType; 
-	    var col : outGraph.offsets.eltType; 
+	    var row : idxType; 
+	    var col : idxType; 
 		
 		row = indices[i];
 		col = dests[i];
 		Ni  = offsets[row + 1] - offsets[row];
 		Nj  = offsets[col + 1] - offsets[col];
-		triangles[i] = weights[i]:outGraph.indices.eltType; 
+		triangles[i] = weights[i]:fullOutGraph.indices.eltType; 
 		if (triangles[i] > 0){
 			  trusses[i] = triangles[i] + 2;
 		}
@@ -166,9 +170,9 @@ module EdgeCentric {
           weights_time.stop();
       //Copy arrays out
 	  //dest_inds = dests;
-      outGraph.offsets = offsets;
-      outGraph.indices = indices;
-      outGraph.weights = jaccards;
+      fullOutGraph.offsets = offsets;
+      fullOutGraph.indices = indices;
+      fullOutGraph.weights = jaccards;
 	 // writeln("dests are ", dests);
     }
     gpu_region_time.stop();
@@ -176,19 +180,49 @@ module EdgeCentric {
     writeln("EC_Intersect Elapsed (s): ", intersect_time.elapsed());
     writeln("EC_Weights Elapsed (s): ", weights_time.elapsed());
     writeln("EC_GPU_Region Elapsed (s): ", gpu_region_time.elapsed());
-	//writeln("offsets1 ", outGraph.offsets[1]);
-	//writeln("offsets2 ", outGraph.offsets[2]);
-    //for i in outGraph.offsets[1]..outGraph.offsets[2] do
+	//writeln("offsets1 ", fullOutGraph.offsets[1]);
+	//writeln("offsets2 ", fullOutGraph.offsets[2]);
+    //for i in fullOutGraph.offsets[1]..fullOutGraph.offsets[2] do
 	//	writeln("hello #", i);
 	
-	var count : outGraph.indices.eltType; 
-	for k in outGraph.indices.domain{
-	   if ( outGraph.weights[k] > 0:outGraph.weights.eltType){
+	var count : fullOutGraph.indices.eltType; 
+	for k in fullOutGraph.indices.domain{
+	   if ( fullOutGraph.weights[k] > 0:fullOutGraph.weights.eltType){
 		   count = count + 1;
 	}}
 	writeln(" Pairs with non zero intersection : ", count);
   }
 
+  private proc jaccard(in inGraph : CSR_base, inout outGraph : CSR_base, param iWidth : int, param oWidth : int, param wWidth : int) {
+    type arrType = unmanaged CSR_arrays(iWidth, oWidth, wWidth);
+    if (inGraph.isWeighted) {
+      EC_Jaccard(arrType, inGraph, outGraph, true);
+    } else {
+      EC_Jaccard(arrType, inGraph, outGraph, false);
+    }
+  }
+  private proc jaccard(in inGraph : CSR_base, inout outGraph : CSR_base, param iWidth : int, param oWidth : int) {
+    if (inGraph.isWeightT64) {
+      jaccard(inGraph, outGraph, iWidth, oWidth, 64);
+    } else {
+      jaccard(inGraph, outGraph, iWidth, oWidth, 32);
+    }
+  }
+  private proc jaccard(in inGraph : CSR_base, inout outGraph : CSR_base, param iWidth : int) {
+    if (inGraph.isEdgeT64) {
+      jaccard(inGraph, outGraph, iWidth, 64);
+    } else {
+      jaccard(inGraph, outGraph, iWidth, 32);
+    }
+  }
+  //This is the entrypoint, the user shouldn't need to interact with the intermediate steps of the ladder
+  proc jaccard(in inGraph : unmanaged CSR_base, inout outGraph : unmanaged CSR_base) {
+    if (inGraph.isVertexT64) {
+      jaccard(inGraph, outGraph, 64);
+    } else {
+      jaccard(inGraph, outGraph, 32);
+    }
+  }
   //FIXME: Should the intermediate steps be privatized?
   proc jaccard(in inCSR : CSR_handle, in outCSR : CSR_handle, param isVertexT64 : bool, param isEdgeT64 : bool, param isWeightT64 : bool) {
     //We only use inCSR here because outCSR is guaranteed to be weighted. inCSR may or may not be
