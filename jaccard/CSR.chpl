@@ -237,6 +237,21 @@ prototype module CSR {
         isWeightT64 = from.isWeightT64
       );
     }
+    override proc writeThis(f) throws {
+      if (f.binary()) {
+
+      } else {
+        var ret = "" : string;
+        //concrete type and pointer and opening brace
+        ret += stringify(this.type:string, ", ", this : c_void_ptr) + ": {";
+        //Sizes
+        ret += stringify("numEdges = ", numEdges, ", numVerts = ",  numVerts, ", ");
+        //Flags
+        ret += stringify("isWeighted = ", isWeighted, ", isVertexT64 = ", isVertexT64, ", isEdgeT64 = ",  isEdgeT64, ", isWeightT64 = ",  isWeightT64, ", isZeroIndexed = ", isZeroIndexed, ", isDirected = ",  isDirected, ", hasReverseEdges = ", hasReverseEdges);
+        ret += "}";
+        f.write(ret);
+      }
+    }
   }
 
   // New parameterized generic subclass that only holds graph arrays
@@ -275,6 +290,24 @@ prototype module CSR {
         weights = from.weights
       );
       return tmp;
+    }
+    override proc writeThis(f) throws {
+      if (f.binary()) {
+
+      } else {
+        var ret = "" : string;
+        super.writeThis(f);
+        ret += " -> ";
+        ret += stringify(this.type:string, ", ", this : c_void_ptr) + ": {";
+        //Emulate the default class writeThis, but with truncated array prints, and a pointer
+        //Domains
+        ret += stringify("idxDom = ", idxDom, ", offDom = ", offDom, ", weightDom = ", weightDom, ", ");
+        //Truncated arrays
+        ret += stringify("indices = [", indices[0..10], " ...], offsets = [", offsets[0..10], " ...], weights = [", weights[0..10], " ...]");
+        //Closing brace
+        ret += "}";
+        f.write(ret);
+      }
     }
   }
 
