@@ -120,6 +120,19 @@ prototype module CSR {
       var tmp : to = from;
       return tmp;
     }
+    operator :(from : CSR_base, type to : this.type) {
+      var tmp = new to();
+      tmp.numEdges = from.numEdges;
+      tmp.numVerts = from.numVerts;
+      tmp.isWeighted = from.isWeighted;
+      tmp.isZeroIndexed = from.isZeroIndexed;
+      tmp.isDirected = from.isDirected;
+      tmp.hasReverseEdges = from.hasReverseEdges;
+      tmp.isVertexT64 = from.isVertexT64;
+      tmp.isEdgeT64 = from.isEdgeT64;
+      tmp.isWeightT64 = from.isWeightT64;
+      return tmp;
+    }
   }
     //FIXME: These really belong to the CSR_handle record, but private cannot be applied to members yet
     private proc writeCSRHandle(param isWeighted : bool, param isVertexT64 : bool, param isEdgeT64 : bool, param isWeightT64 : bool, in handle : CSR_handle, in channel) {
