@@ -55,6 +55,36 @@ prototype module CSR {
       var tmp : to = from;
       return tmp;
     }
+    proc init=(rhs : CSR_base) {
+      this.numVerts = rhs.numVerts;
+      this.numEdges = rhs.numEdges;
+      //flags
+      this.flags = 0; //Have to start with a non-compound initialization
+      if (rhs.isWeighted) { this.flags |= (CSR_header_flags.isWeighted : int(64)); }
+      if (rhs.isZeroIndexed) { this.flags |= (CSR_header_flags.isZeroIndexed : int(64)); }
+      if (rhs.isDirected) { this.flags |= (CSR_header_flags.isDirected : int(64)); }
+      if (rhs.hasReverseEdges) { this.flags |= (CSR_header_flags.hasReverseEdges : int(64)); }
+      if (rhs.isVertexT64) { this.flags |= (CSR_header_flags.isVertexT64 : int(64)); }
+      if (rhs.isEdgeT64) { this.flags |= (CSR_header_flags.isEdgeT64 : int(64)); }
+      if (rhs.isWeightT64) { this.flags |= (CSR_header_flags.isWeightT64 : int(64)); }
+    }
+    operator =(ref lhs: CSR_file_header, rhs : CSR_base) {
+      lhs.numVerts = rhs.numVerts;
+      lhs.numEdges = rhs.numEdges;
+      //flags
+      lhs.flags = 0; //Have to start with a non-compound initialization
+      if (rhs.isWeighted) { lhs.flags |= (CSR_header_flags.isWeighted : int(64)); }
+      if (rhs.isZeroIndexed) { lhs.flags |= (CSR_header_flags.isZeroIndexed : int(64)); }
+      if (rhs.isDirected) { lhs.flags |= (CSR_header_flags.isDirected : int(64)); }
+      if (rhs.hasReverseEdges) { lhs.flags |= (CSR_header_flags.hasReverseEdges : int(64)); }
+      if (rhs.isVertexT64) { lhs.flags |= (CSR_header_flags.isVertexT64 : int(64)); }
+      if (rhs.isEdgeT64) { lhs.flags |= (CSR_header_flags.isEdgeT64 : int(64)); }
+      if (rhs.isWeightT64) { lhs.flags |= (CSR_header_flags.isWeightT64 : int(64)); }
+    }
+    operator :(from : CSR_base, type to : this.type) {
+      var tmp : to = from;
+      return tmp;
+    }
   }
 
   //Runtime type descriptor
@@ -239,7 +269,8 @@ prototype module CSR {
     }
     override proc writeThis(f) throws {
       if (f.binary()) {
-
+        //Construct a header from my descriptor and write it
+        f.write(this : CSR_file_header);
       } else {
         var ret = "" : string;
         //concrete type and pointer and opening brace
@@ -293,7 +324,11 @@ prototype module CSR {
     }
     override proc writeThis(f) throws {
       if (f.binary()) {
-
+        super.writeThis(f);
+        //Print offsets, then indices, then weights
+        f.write(offsets);
+        f.write(indices);
+        if (isWeighted) { f.write(weights); }
       } else {
         var ret = "" : string;
         super.writeThis(f);
@@ -589,6 +624,16 @@ proc readCSRFile(in inFile : string) : CSR_handle {
     return retHandle;
 }
 
+proc writeCSRFile(in outFile : string, in base : CSR_base) {
+  //Open the file
+  var writeFile = IO.open(outFile, IO.iomode.cw);
+  //Create a write channel
+  var writeChannel = writeFile.writer(kind = IO.iokind.native, locking = false, hints = IO.ioHintSet.sequential);
+  writeln(base);
+  //Write the data arrays
+  writeChannel.write(base);
+  //TODO anything to gracefully close the channel/file?
+}
 proc writeCSRFile(in outFile : string, in handle : CSR_handle) {
   //Open the file
   var writeFile = IO.open(outFile, IO.iomode.cw);

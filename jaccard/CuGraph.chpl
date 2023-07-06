@@ -251,8 +251,7 @@ module CuGraph {
     writeln("VC_GPU_Region Elapsed (s): ", gpu_region_time.elapsed());
     writeln("Configured work size is : ", writeWork, " with grid ", writeGrid, " and block ", writeBlock);
     if (isectFile != "") {
-      var tempIsectCSR = MakeCSR((isectCSR : CSR(isWeighted = true, isVertexT64 = (isectCSR.iWidth == 64), isEdgeT64 = (isectCSR.oWidth == 64), isWeightT64 = (isectCSR.wWidth == 64))).getDescriptor()); //TODO cast a CSR_base into a descriptor to make a CSR_handle so we can write it
-      writeCSRFile(isectFile, tempIsectCSR);
+      writeCSRFile(isectFile, isectCSR);
     }
   }
 

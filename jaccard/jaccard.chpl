@@ -27,7 +27,7 @@ module Jaccard {
     outDesc.isWeighted = true; //Always need weights on outputs, that's where we store JS values
     var outCSR = MakeCSR(outDesc);
     var inBase = deepCastToBase(inCSR);
-    var outBase = deepCastToBase(outCSR);
+    var outBase = MakeCSR(outDesc : CSR_base);
     //Launch the selected kernel pipeline
     if (useCUGraph) {
       CuGraph.jaccard(inBase, outBase);
@@ -35,8 +35,6 @@ module Jaccard {
       EdgeCentric.jaccard(inBase, outBase);
     }
     //Write the output file
-    outCSR = deepCastToHandle(outBase);
-    delete outBase;
-    writeCSRFile(outFile, outCSR); //TODO replace with outCSR once we have a copy operator for CSR handles
+    writeCSRFile(outFile, outBase);
   }
 }
