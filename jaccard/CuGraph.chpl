@@ -278,78 +278,12 @@ module CuGraph {
       jaccard(inGraph, outGraph, iWidth, 32);
     }
   }
+  //This is the entrypoint, the user shouldn't need to interact with the intermediate steps of the ladder
   proc jaccard(in inGraph : unmanaged CSR_base, inout outGraph : unmanaged CSR_base) {
     if (inGraph.isVertexT64) {
       jaccard(inGraph, outGraph, 64);
     } else {
       jaccard(inGraph, outGraph, 32);
-    }
-  }
-
-  //FIXME: Should the intermediate steps be privatized?
-  proc jaccard(in inCSR : CSR_handle, ref outCSR : CSR_handle, param isVertexT64 : bool, param isEdgeT64 : bool, param isWeightT64 : bool) {
-    //We only use inCSR here because outCSR is guaranteed to be weighted. inCSR may or may not be
-    type arrType = CSR_arrays((if isVertexT64 then 64 else 32), (if isEdgeT64 then 64 else 32), (if isWeightT64 then 64 else 32));
-    var inArr : unmanaged arrType;
-    var outArr : unmanaged arrType;
-    if (inCSR.desc.isWeighted) {
-      //Recast both and call VC_Jaccard
-      var inCSRInstance = ReinterpretCSRHandle(unmanaged CSR(isWeighted = true, isVertexT64, isEdgeT64, isWeightT64), inCSR);
-      var outCSRInstance = ReinterpretCSRHandle(unmanaged CSR(isWeighted = true, isVertexT64, isEdgeT64, isWeightT64), outCSR);
-      inArr = (inCSRInstance : arrType);
-      outArr = (outCSRInstance : arrType);
-      delete outCSRInstance;
-      var newOutCSRInstance : outCSRInstance.type;
-      var tmpOutBase = outArr : CSR_base;
-      jaccard(inArr, tmpOutBase);
-      newOutCSRInstance = (outArr : outCSRInstance.type);
-      delete outArr;
-      outCSR.data = (newOutCSRInstance : c_void_ptr);
-      writeln(newOutCSRInstance);
-      writeln(outCSR.data);
-    } else {
-      //Recast both and call VC_Jaccard
-      var inCSRInstance = ReinterpretCSRHandle(unmanaged CSR(isWeighted = false, isVertexT64, isEdgeT64, isWeightT64), inCSR);
-      //This will always be true to store the weights
-      var outCSRInstance = ReinterpretCSRHandle(unmanaged CSR(isWeighted = true, isVertexT64, isEdgeT64, isWeightT64), outCSR);
-      inArr = (inCSRInstance : arrType);
-      outArr = (outCSRInstance : arrType);
-      delete outCSRInstance;
-      var newOutCSRInstance : outCSRInstance.type;
-      var tmpOutBase = outArr : CSR_base;
-      jaccard(inArr, tmpOutBase);
-      newOutCSRInstance = (outArr : outCSRInstance.type);
-      delete outArr;
-      outCSR.data = (newOutCSRInstance : c_void_ptr);
-      writeln(newOutCSRInstance);
-      writeln(outCSR.data);
-    }
-  }
-
-  proc jaccard(in inCSR : CSR_handle, ref outCSR : CSR_handle, param isVertexT64 : bool, param isEdgeT64 : bool) {
-    if (outCSR.desc.isWeightT64) {
-      jaccard(inCSR, outCSR, isVertexT64, isEdgeT64, false);
-    } else {
-      jaccard(inCSR, outCSR, isVertexT64, isEdgeT64, false);
-    }
-  }
-
-  proc jaccard(in inCSR : CSR_handle, ref outCSR : CSR_handle, param isVertexT64 : bool) {
-    if (outCSR.desc.isEdgeT64) {
-      jaccard(inCSR, outCSR, isVertexT64, false);
-    } else {
-      jaccard(inCSR, outCSR, isVertexT64, false);
-    }
-  }
-
-  //This is the entrypoint, the user shouldn't need to interact with the intermediate steps of the ladder
-  proc jaccard(in inCSR : CSR_handle, ref outCSR : CSR_handle) {
-    //TODO If the input format doesn't match the output, coerce it immediately and then use that instead
-    //We compute in output-native format
-    if (outCSR.desc.isVertexT64) {
-      jaccard(inCSR, outCSR, false);
-    } else {
-      jaccard(inCSR, outCSR, false);
     }
   }
 }
