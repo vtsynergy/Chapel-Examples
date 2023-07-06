@@ -85,7 +85,7 @@ module CuGraph {
     var fullOutGraph = try! (outGraph : csr_type);
 
     //Debug intersections
-    var isectCSR : csr_type = fullOutGraph;
+    var isectCSR = try! (MakeCSR(outGraph) : csr_type); //Base it on the outGraph, but make a new instance
 
     //Kernels happen here
     //This is a trivial that just writes the thread ID for each edge
