@@ -267,6 +267,21 @@ prototype module CSR {
         isWeightT64 = from.isWeightT64
       );
     }
+    operator :(from : CSR_file_header, type to : this.type) {
+      assert(from.binaryFormatVersion == CSR_BINARY_FORMAT_VERSION, "Assigning incompatible binary version ", from.binaryFormatVersion, " but expected ", CSR_BINARY_FORMAT_VERSION);
+      var tmp = new to(
+        numEdges = from.numEdges,
+        numVerts = from.numVerts,
+        isWeighted = if ((from.flags & (CSR_header_flags.isWeighted : int(64))) != 0) then true else false,
+        isZeroIndexed = if ((from.flags & (CSR_header_flags.isZeroIndexed : int(64))) != 0) then true else false,
+        isDirected = if ((from.flags & (CSR_header_flags.isDirected : int(64))) != 0) then true else false,
+        hasReverseEdges = if ((from.flags & (CSR_header_flags.hasReverseEdges : int(64))) != 0) then true else false,
+        isVertexT64 = if ((from.flags & (CSR_header_flags.isVertexT64 : int(64))) != 0) then true else false,
+        isEdgeT64 = if ((from.flags & (CSR_header_flags.isEdgeT64 : int(64))) != 0) then true else false,
+        isWeightT64 = if ((from.flags & (CSR_header_flags.isWeightT64 : int(64))) != 0) then true else false
+       );
+      return tmp;
+    }
     override proc writeThis(f) throws {
       if (f.binary()) {
         //Construct a header from my descriptor and write it
@@ -281,6 +296,28 @@ prototype module CSR {
         ret += stringify("isWeighted = ", isWeighted, ", isVertexT64 = ", isVertexT64, ", isEdgeT64 = ",  isEdgeT64, ", isWeightT64 = ",  isWeightT64, ", isZeroIndexed = ", isZeroIndexed, ", isDirected = ",  isDirected, ", hasReverseEdges = ", hasReverseEdges);
         ret += "}";
         f.write(ret);
+      }
+    }
+    //We can't mutate the actual type of the this instance to a CSR_arrays, so this will only ever assign header values. The client will have to use a bare base with MakeCSR/ReadCSRArrays itself
+    override proc readThis(f) throws {
+      if (f.binary()) {
+        //Read the fixed-size header
+        var header : CSR_file_header;
+        f.read(header);
+        //Convert the header to a CSR_base using overloaded cast
+        var from = header : CSR_base;
+        //Elementwise assign since we aren't allowed to overload class assignment, nor directly write to this
+        this.numEdges = from.numEdges;
+        this.numVerts = from.numVerts;
+        this.isWeighted = from.isWeighted;
+        this.isZeroIndexed = from.isZeroIndexed;
+        this.isDirected = from.isDirected;
+        this.hasReverseEdges = from.hasReverseEdges;
+        this.isVertexT64 = from.isVertexT64;
+        this.isEdgeT64 = from.isEdgeT64;
+        this.isWeightT64 = from.isWeightT64;
+      } else {
+        assert(false, "CSR_base text read not supported!");
       }
     }
   }
@@ -342,6 +379,33 @@ prototype module CSR {
         //Closing brace
         ret += "}";
         f.write(ret);
+      }
+    }
+    override proc readThis(f) throws{
+      if (f.binary()) {
+        //Assume we are at zero offset to re-read the header
+        //Read the header and convert it to descriptor
+        var header : CSR_file_header;
+        f.read(header);
+        //Convert the header to a base using operator overload
+        var base = header : CSR_base;
+        //Assert that all the fields match
+	assert((this.isWeighted == base.isWeighted &&
+                this.isZeroIndexed == base.isZeroIndexed &&
+                this.isDirected == base.isDirected &&
+                this.hasReverseEdges == base.hasReverseEdges &&
+                this.isVertexT64 == base.isVertexT64 &&
+                this.isEdgeT64 == base.isEdgeT64 &&
+                this.isWeightT64 == base.isWeightT64 &&
+                this.numEdges == base.numEdges &&
+                this.numVerts == base.numVerts),
+                "Error reading ", this.type : string, " from incompatible binary representation ", base : string);
+        //Read arrays in order
+        f.read(this.offsets);
+        f.read(this.indices);
+        if (isWeighted) { f.read(this.weights); }
+      } else {
+        assert(false, "CSR text read not supported!");
       }
     }
   }
@@ -607,10 +671,54 @@ proc ReadCSRArrays(in handle : CSR_handle, in channel) {
   } else {
     ReadCSRArrays(handle, channel, false);
   }
-} 
+}
 
-proc readCSRFile(in inFile : string) : CSR_handle {
+private proc ReadCSRArrays(in base : CSR_base, in channel, param isVertexT64 : bool, param isEdgeT64 : bool, param isWeightT64 : bool) {
+  var retArrays = try! (base : CSR_arrays(if isVertexT64 then 64 else 32, if isEdgeT64 then 64 else 32, if isWeightT64 then 64 else 32));
+  channel.read(retArrays);
+}
+private proc ReadCSRArrays(in base : CSR_base, in channel, param isVertexT64 : bool, param isEdgeT64 : bool) {
+  if (base.isWeightT64) {
+    ReadCSRArrays(base, channel, isVertexT64, isEdgeT64, true);
+  } else {
+    ReadCSRArrays(base, channel, isVertexT64, isEdgeT64, false);
+  }
+}
+private proc ReadCSRArrays(in base : CSR_base, in channel, param isVertexT64 : bool) {
+  if (base.isEdgeT64) {
+    ReadCSRArrays(base, channel, isVertexT64, true);
+  } else {
+    ReadCSRArrays(base, channel, isVertexT64, false);
+  }
+}
+proc ReadCSRArrays(in base : CSR_base, in channel) {
+  if (base.isVertexT64) {
+    ReadCSRArrays(base, channel, true);
+  } else {
+    ReadCSRArrays(base, channel, false);
+  }
+}
 
+proc readCSRFileToBase(in inFile : string) : CSR_base {
+    ///File operations (which they are reworking as of 1.29.0)
+    //FIXME: Add error handling
+    //Open
+    var readFile = IO.open(inFile, IO.iomode.r);
+    //Create a read channel
+    var readChannel = readFile.reader(kind = IO.iokind.native, locking = false, hints = IO.ioHintSet.sequential);
+    //Read the descriptor CSR_base
+    var desc = new unmanaged CSR_base();
+    readChannel.read(desc);
+    //Make the actual CSR_arrays based on the descriptor base
+    var retArrays = MakeCSR(desc);
+    //Rewind the file cursor to zero offset, with unbounded range
+    readChannel.seek(0..);
+    //Invoke the param-spec ladder to read the actual CSR member
+    ReadCSRArrays(retArrays, readChannel);
+    //TODO anything to gracefully close the channel/file?
+    return retArrays;
+}
+proc readCSRFileToHandle(in inFile : string) : CSR_handle {
     ///File operations (which they are reworking as of 1.29.0)
     //FIXME: Add error handling
     //Open

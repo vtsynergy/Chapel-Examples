@@ -21,13 +21,19 @@ module Jaccard {
     assert(outFile != "", "Must provide output file with '--outFile=<pathToFile>'");
 
     //Read the input file and set up host arrays (use generic methods to support different FP types)
-    var inCSR = readCSRFile(inFile);
-    //Create an empty output CSR of the same type as the input, the kernel pipelines will populate it
-    var outDesc = inCSR.desc;
-    outDesc.isWeighted = true; //Always need weights on outputs, that's where we store JS values
-    var outCSR = MakeCSR(outDesc);
-    var inBase = deepCastToBase(inCSR);
-    var outBase = MakeCSR(outDesc : CSR_base);
+    var inBase = readCSRFileToBase(inFile);
+    //Create an empty output CSR of the same type as the input, the kernel pipelines will populate it, but always need weights on outputs, that's where we store JS values
+    var outBase = MakeCSR(new CSR_base(
+      numEdges = inBase.numEdges,
+      numVerts = inBase.numVerts,
+      isWeighted = true,
+      isZeroIndexed = inBase.isZeroIndexed,
+      isDirected = inBase.isDirected,
+      hasReverseEdges = inBase.hasReverseEdges,
+      isVertexT64= inBase.isVertexT64,
+      isEdgeT64 = inBase.isEdgeT64,
+      isWeightT64 = inBase.isWeightT64
+    ));
     //Launch the selected kernel pipeline
     if (useCUGraph) {
       CuGraph.jaccard(inBase, outBase);
